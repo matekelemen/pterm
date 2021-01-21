@@ -13,18 +13,36 @@ intensityMap = " .,:;i1tfLCG08@"
 
 
 def loadImageToArray( filePath: str,
+                      terminalSize: list,
                       size=None ):
 
     filePath = pathlib.Path( filePath )
-    image    = Image.open( filePath )
 
+    try:
+        image    = Image.open( filePath )
+    except Exception as exception:
+        raise RuntimeError( "Failed to load image\n" + str(exception) )
+
+    # Check whether an image size was provided
     if size == None:
-        size = image.size
+        size = list(image.size)
 
-    return numpy.asarray(
-        Image.open( filePath ).resize( size ),
-        dtype=numpy.uint8
-    )
+    # Fit size to terminal
+    if terminalSize[0] < size[0]:
+        size[1] = int( float(terminalSize[0]) / size[0] * size[1] / 2.0 )
+        size[0] = terminalSize[0]
+    if terminalSize[1] < size[1]:
+        size[0] = int( float(terminalSize[1]) / size[1] * size[0] )
+        size[1] = terminalSize[1]
+
+    image = Image.open( filePath )
+    image.load()
+
+    return image, size
+
+
+def imageToArray( image ):
+    return numpy.array( image, dtype=numpy.uint8 )
 
 
 def valueToASCII( value: int ):
@@ -33,15 +51,13 @@ def valueToASCII( value: int ):
     ))]
 
 
-def rgbImageToASCII( image: numpy.ndarray ):
+def rgbImageToASCII( image ):
     message = ""
-
-    for pixelRow in image:
+    for pixelRow in numpy.array( image, dtype=numpy.uint8 ):
         for pixel in pixelRow:
             message += ansiColored(
                 valueToASCII( rgbToGrayScale(pixel) ),
                 tuple(pixel)
             )
-        message += '\n'
-
-    return message
+        message += "\n"
+    return message[:-1]
