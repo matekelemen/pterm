@@ -1,3 +1,11 @@
+// ------------------------------------------------------------------------------------
+// Yet another program that 'draws' on the terminal
+//
+// -b   : color background instead of colored ASCII characters
+// ------------------------------------------------------------------------------------
+
+
+
 // --- External Includes ---
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -13,11 +21,8 @@
 
 
 
-
 // Compile options set in CMake
 //#define PTERM_DEBUG     // <-- print debug output
-//#define PTERM_NOCHAR    // <-- color background instead of characters
-
 
 
 
@@ -28,6 +33,7 @@ typedef char            Char;
 typedef unsigned char   UChar;
 typedef float           Float;
 typedef double          Double;
+typedef UInt            Bool;
 
 
 // Linear map: grayscale value -> ASCII character
@@ -48,6 +54,9 @@ const UChar asciiIntensityTable[]   = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 
 #define PTERM_ENVIRONMENT_ERROR 5
 #define PTERM_IO_ERROR          6
 
+// Other
+#define PTERM_TRUE              1
+#define PTERM_FALSE             0
 
 // Macro switch for debug printing
 #ifdef PTERM_DEBUG
@@ -73,6 +82,77 @@ void getTerminalSize( Int* rows, Int* columns )
 
 
 // ------------------------------------------------------------------------------------
+// UTILITY
+// ------------------------------------------------------------------------------------
+
+/// Safe and slow string copy
+void copyString( const Char* source, Char** destination )
+{
+    UInt sourceSize = 0;
+    while( PTERM_TRUE ) { if ( source[sourceSize++] == '\0' ) break; }
+    
+    *destination = (Char*) malloc( sourceSize );
+    strcpy( *destination, source );
+}
+
+
+void printHelp()
+{
+    /// TODO
+    puts( "--help" );
+    puts( "filename: path to image file" );
+    puts( "[-h] print help" );
+    puts( "[-b] color background instead of ASCII characters" );
+}
+
+
+Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgroundOnly )
+{
+    // Check number of arguments
+    if ( argc < 2 )
+    {
+        printf( "%s\n", "Expecting at least a path to an image file but got no arguments" );
+        return PTERM_ARGUMENT_ERROR;
+    }
+
+    for ( Int i=1; i<argc; ++i )
+    {
+        Char token = argv[i][0];
+
+        if ( token == '\0' ) // empty argument
+            continue;
+
+        if ( token != '-' ) // not a flag, not an argument-value pair -> must be a file name
+        {
+            copyString( argv[i], fileName );
+            continue;
+        }
+
+        else // flag or argument-value pair
+        {
+            token = argv[i][1];
+
+            if ( token == 'b' ) // flag: backgroundOnly
+            {
+                *backgroundOnly = PTERM_TRUE;
+                continue;
+            }
+            if ( token == 'h' )
+                return PTERM_FALSE;
+            if ( token == '-' ) // argument-value pair
+            {}
+        }
+
+        // Unhandled
+        printf( "Unrecognized argument: %s\n", argv[i] );
+        return PTERM_FALSE;
+    } // for argc
+
+    return PTERM_TRUE;
+}
+
+
+// ------------------------------------------------------------------------------------
 // ANSI STUFF
 // ------------------------------------------------------------------------------------
 
@@ -85,16 +165,15 @@ const UChar ansiColorReset[] = "\e[0m";
 
 
 /// Note: ansi must be at least ansiColorSize long
-void initializeANSIColorCode( UChar* ansi )
+void initializeANSIColorCode( UChar* ansi, Bool backgroundOnly )
 {
     ansi[0] = '\e';
     ansi[1] = '[';
 
-    #ifdef PTERM_NOCHAR
-    ansi[2] = '4';  // <-- colored background
-    #else
-    ansi[2] = '3';  // <-- colored character
-    #endif
+    if ( backgroundOnly )
+        ansi[2] = '4';  // <-- colored background
+    else
+        ansi[2] = '3';  // <-- colored character
 
     ansi[3] = '8';
     ansi[4] = ';';
@@ -136,7 +215,7 @@ void insertANSIReset( UChar* ansi )
 // CONVENIENCE
 // ------------------------------------------------------------------------------------
 
-// Read pixel from loaded image
+/// Read pixel from loaded image
 void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
 {
     const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
@@ -211,15 +290,17 @@ Int fitImageToTerminal( UChar** image, Int* imageWidth, Int* imageHeight, Int nu
 
 int main( int argc, char const* argv[] )
 {
-    // Check number of arguments
-    if ( argc != 2 )
+    // Init
+    Char* fileName = NULL;
+    Bool backgroundOnly = PTERM_FALSE;
+
+    if ( !parseArguments( argc, argv, &fileName, &backgroundOnly ) )
     {
-        printf( "Expecting a path to an image file but got %i arguments instead\n", argc-1 );
+        printHelp();
         return PTERM_ARGUMENT_ERROR;
     }
 
     // Load image (convert to 3 channels, hopefully RGB)
-    const Char* fileName = argv[1];
     Int imageWidth=0, imageHeight=0, numberOfChannels=0;
     UChar* image = stbi_load( fileName, &imageWidth, &imageHeight, &numberOfChannels, 3 );
 
@@ -237,13 +318,14 @@ int main( int argc, char const* argv[] )
 
     if ( numberOfChannels != 3 )
     {
-        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Converting it to RGB...\n", numberOfChannels );
+        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Converted it to RGB!\n", numberOfChannels );
         numberOfChannels = 3;
-        //printf( "Unsupported number of channels (%i). RGB only!\n", numberOfChannels );
-        //return PTERM_INPUT_ERROR;
     }
 
     PTERM_DEBUG_PRINTF( "Successfully loaded %ix%ix%i image\n", imageWidth, imageHeight, numberOfChannels );
+
+    free(fileName);
+    fileName = NULL;
 
     // Load environment
     Int terminalRows=0, terminalColumns=0;
@@ -295,16 +377,15 @@ int main( int argc, char const* argv[] )
         for ( UInt columnIndex=0; columnIndex<imageWidth; ++columnIndex )
         {
             getPixel( image, pixel, rowIndex, columnIndex, imageWidth, imageHeight, numberOfChannels );
-            initializeANSIColorCode( currentOutput );
+            initializeANSIColorCode( currentOutput, backgroundOnly );
             updateANSIColorCode( pixel[0], pixel[1], pixel[2], currentOutput );
 
             currentOutput += ansiColorSize;
 
-            #ifdef PTERM_NOCHAR
-            *currentOutput++ = ' ';
-            #else
-            *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
-            #endif
+            if ( backgroundOnly )
+                *currentOutput++ = ' ';
+            else
+                *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
 
         } // for column
 
@@ -319,6 +400,10 @@ int main( int argc, char const* argv[] )
 
     // Print
     printf( "%s%s", output, ansiColorReset );
+
+    free(image);
+    free(pixel);
+    free(output);
 
     return PTERM_SUCCESS;
 }
