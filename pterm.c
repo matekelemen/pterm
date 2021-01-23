@@ -228,8 +228,7 @@ int main( int argc, char const* argv[] )
 
         } // for column
 
-        //*(++currentOutput) = '\n';
-        ++currentOutput;
+        *(currentOutput++) = '\n';
 
     } // for row
 
