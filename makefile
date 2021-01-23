@@ -1,6 +1,7 @@
 .PHONY : all clean
-all = pterm
-LIBS = -lm
+all=pterm
+CFLAGS=-O3 -DNDEBUG
+LIBS=-lm
 
 pterm: pterm.o
 	gcc -o $@ $^ $(LIBS)
