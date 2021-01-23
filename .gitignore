@@ -1,8 +1,12 @@
+.vscode
+
 *.pyc
 *.pyd
+__pycache__
+
 *.log
 *.lib
-__pycache__
+*.html
 
 # Linux
 *.o
