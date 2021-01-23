@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
 
 #include <sys/ioctl.h>  // <--
 #include <unistd.h>     // <-- for getting the terminal's size on linux
@@ -469,6 +470,8 @@ int main( int argc, char const* argv[] )
     }
 
     // Loop through frames
+    clock_t time = clock();
+
     for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=imageWidth*imageHeight*numberOfChannels )
     {
 
@@ -516,6 +519,9 @@ int main( int argc, char const* argv[] )
         *currentOutput = '\0';
 
         // Print
+        while( difftime(clock(),time) < 1000*delays[frameIndex] ) {}
+        time = clock();
+
         printf( "%s%s", output, ansiColorReset );
     }
 
