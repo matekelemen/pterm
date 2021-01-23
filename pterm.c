@@ -15,6 +15,8 @@
 
 // --- STL Includes ---
 #include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
 
 #include <sys/ioctl.h>  // <--
 #include <unistd.h>     // <-- for getting the terminal's size on linux
@@ -71,7 +73,7 @@ const UChar asciiIntensityTable[]   = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 
 // ENVIRONMENT
 // ------------------------------------------------------------------------------------
 
-// Get parent terminal size on linux
+/// Get parent terminal size on linux
 void getTerminalSize( Int* rows, Int* columns )
 {
     struct winsize w;
@@ -96,6 +98,69 @@ void copyString( const Char* source, Char** destination )
 }
 
 
+/// Load file into memory
+UChar* loadFile( const Char* fileName, UInt* size )
+{
+    UChar* data = NULL;
+    *size = 0;
+
+    if ( fileName )
+    {
+        errno = 0;
+        FILE* file = fopen( fileName, "rb" );
+
+        if ( file )
+        {
+            // Get file size
+            fseek( file, 0, SEEK_END );
+            Int fileSize = ftell(file);
+            fseek( file, 0, SEEK_SET );
+
+            if ( fileSize )
+            {
+                // Allocate memory
+                data = (UChar*) malloc( fileSize * sizeof(UChar) );
+                *size = (UInt) fread( data, sizeof(UChar), fileSize, file );
+            }
+            else
+                PTERM_DEBUG_PRINTF( "%s\n", "WARNING: empty file" );
+        } // if file
+        else
+        {
+            printf( "Failed to open %s (%s)\n", fileName, strerror(errno) );
+            exit( PTERM_INPUT_ERROR );
+        } // if !file
+    }
+    else
+    {
+        puts( "No file name provided!" );
+        exit( PTERM_INPUT_ERROR );
+    }
+
+    return data;
+}
+
+
+/// Get pointer to the file extension in a null-terminated string
+const Char* fileExtension( const Char* fileName )
+{
+    const Char* extension = fileName;
+    const Char* tmp = fileName;
+
+    while ( *tmp != '\0' )
+    {
+        if ( *tmp == '.' )
+            extension = tmp;
+        ++tmp;
+    }
+
+    if ( extension == fileName ) // no extension
+        extension = tmp;
+
+    return extension;
+}
+
+
 void printHelp()
 {
     /// TODO
@@ -106,7 +171,7 @@ void printHelp()
 }
 
 
-Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgroundOnly )
+Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgroundOnly, Bool* isGIF )
 {
     // Check number of arguments
     if ( argc < 2 )
@@ -147,6 +212,9 @@ Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgr
         printf( "Unrecognized argument: %s\n", argv[i] );
         return PTERM_FALSE;
     } // for argc
+
+    if ( strcmp(fileExtension(*fileName), ".gif") == 0 )
+        *isGIF = PTERM_TRUE;
 
     return PTERM_TRUE;
 }
@@ -239,48 +307,38 @@ UChar getASCIIFromRGB( UChar red, UChar green, UChar blue )
 }
 
 
-Int fitImageToTerminal( UChar** image, Int* imageWidth, Int* imageHeight, Int numberOfChannels, Int terminalColumns, Int terminalRows )
+/// Resize source image sizes such that they fit the target terminal size while keeping their aspect ratio
+void fitImageSize( Int* width, Int* height, Int targetWidth, Int targetHeight )
 {
-    Int w = *imageWidth;
-    Int h = *imageHeight;
-
-    if ( terminalColumns < w )
+    if ( targetWidth < *width )
     {
-        h = (terminalColumns*h) / w / 2;
-        w = terminalColumns;
+        *height = (targetWidth*(*height)) / (*width) / 2;
+        *width = targetWidth;
     }
-    if ( terminalRows < h )
+    if ( targetHeight < *height )
     {
-        w = (terminalRows*w) / h;
-        h = terminalRows;
+        *width = (targetHeight*(*width)) / (*height);
+        *height = targetHeight;
     }
+}
 
-    if ( w != *imageWidth || h != *imageHeight )
+
+Int resizeImage( UChar* image, UChar* newImage, Int width, Int height, Int numberOfChannels, Int newWidth, Int newHeight )
+{
+    PTERM_DEBUG_PRINTF( "Resizing image to %ix%i\n", newWidth, newHeight );
+
+    Int resizeResult = stbir_resize_uint8(
+        image, width, height, 0,
+        newImage, newWidth, newHeight, 0, numberOfChannels
+    );
+
+    if ( !*newImage || !resizeResult )
     {
-        PTERM_DEBUG_PRINTF( "Resizing image to %ix%i\n", w, h );
-
-        UChar* newImage = (UChar*) malloc( w * h * numberOfChannels );
-        Int resizeResult = stbir_resize_uint8(
-            *image, *imageWidth, *imageHeight, 0,
-            newImage, w, h, 0, numberOfChannels
-        );
-
-        if ( !newImage || !resizeResult )
-        {
-            printf( "Resizing image to %ix%i failed\n", w, h );
-            return PTERM_FAIL;
-        }
-
-        free(*image);
-
-        *image = newImage;
-        *imageWidth = w;
-        *imageHeight = h;
-
-        PTERM_DEBUG_PRINTF( "Resizing to %ix%i successful\n", *imageWidth, *imageHeight );
+        printf( "Resizing image to %ix%i failed\n", newWidth, newHeight );
+        return PTERM_FAIL;
     }
 
-    return 0;
+    return PTERM_SUCCESS;
 }
 
 
@@ -293,26 +351,64 @@ int main( int argc, char const* argv[] )
     // Init
     Char* fileName = NULL;
     Bool backgroundOnly = PTERM_FALSE;
+    Bool isGIF = PTERM_FALSE;
 
-    if ( !parseArguments( argc, argv, &fileName, &backgroundOnly ) )
+    if ( !parseArguments( argc, argv, &fileName, &backgroundOnly, &isGIF ) )
     {
         printHelp();
         return PTERM_ARGUMENT_ERROR;
     }
 
-    // Load image (convert to 3 channels, hopefully RGB)
-    Int imageWidth=0, imageHeight=0, numberOfChannels=0;
-    UChar* image = stbi_load( fileName, &imageWidth, &imageHeight, &numberOfChannels, 3 );
+    // Load file
+    UInt fileSize = 0;
+    UChar* data = loadFile( fileName, &fileSize );
 
-    if ( !image )
+    if ( !data || !fileSize )
     {
         printf( "Failed to load %s\n", fileName );
         return PTERM_INPUT_ERROR;
     }
 
-    if ( !imageHeight || !imageWidth || !numberOfChannels )
+    PTERM_DEBUG_PRINTF( "Successfully loaded %s of size %i\n", fileName, fileSize );
+
+    // Read image (and convert to RGB if necessary)
+    Int imageWidth=0, imageHeight=0, numberOfChannels=0, numberOfFrames=0;
+    Int* delays = NULL;
+
+    // Get frame (for handling animated gifs)
+    if ( isGIF )
     {
-        printf( "Empty image %ix%ix%i\n", imageWidth, imageHeight, numberOfChannels );
+        UChar* tmp = stbi_load_gif_from_memory( data,
+                                                fileSize,
+                                                &delays,
+                                                &imageWidth,
+                                                &imageHeight,
+                                                &numberOfFrames,
+                                                &numberOfChannels,
+                                                3 );
+        free(data);
+        data = tmp;
+    } // isGIF
+    else
+    {
+        UChar* tmp = stbi_load_from_memory( data, fileSize, &imageWidth, &imageHeight, &numberOfChannels, 3 );
+        free(data);
+        data = tmp;
+        
+        numberOfFrames = 1;
+        delays = (Int*) malloc( sizeof(Int) );
+        delays[0] = 0;
+    } // isGIF else
+
+    if ( !data )
+    {
+        printf( "Failed to load image from %s\n", fileName );
+        return PTERM_INPUT_ERROR;
+    }
+
+    if ( !imageHeight || !imageWidth || !numberOfChannels || !numberOfFrames )
+    {
+        printf( "Empty image %ix%ix%i with %i frames\n", imageWidth, imageHeight, numberOfChannels, numberOfFrames );
         return PTERM_INPUT_ERROR;
     }
 
@@ -322,7 +418,7 @@ int main( int argc, char const* argv[] )
         numberOfChannels = 3;
     }
 
-    PTERM_DEBUG_PRINTF( "Successfully loaded %ix%ix%i image\n", imageWidth, imageHeight, numberOfChannels );
+    PTERM_DEBUG_PRINTF( "Successfully loaded %i %ix%ix%i image(s)\n", numberOfFrames, imageWidth, imageHeight, numberOfChannels );
 
     free(fileName);
     fileName = NULL;
@@ -339,13 +435,8 @@ int main( int argc, char const* argv[] )
 
     PTERM_DEBUG_PRINTF( "Detected %ix%i terminal\n", terminalColumns, terminalRows );
 
-    // Resize the image
-    Int resizeOutput = fitImageToTerminal( &image, &imageWidth, &imageHeight, numberOfChannels, terminalColumns, terminalRows );
-
-    if ( resizeOutput )
-        return resizeOutput;
-
     // Allocate and initialize
+    UChar* frame = data;
     UChar* pixel = (UChar*) malloc( numberOfChannels );
 
     if ( !pixel )
@@ -354,54 +445,83 @@ int main( int argc, char const* argv[] )
         return PTERM_MEMORY_ERROR;
     }
 
-    Int outputSize =
-        imageWidth * imageHeight                // <-- number of pixels
-        * (ansiColorSize+1)                     // <-- payload
-        + imageWidth * (1+ansiColorResetSize);  // <-- newlines with color resets
+    Int width=imageWidth, height=imageHeight;
+    fitImageSize( &width, &height, terminalColumns, terminalRows );
 
+    UChar* resizedImage = (UChar*) malloc( width * height * numberOfChannels );
+
+    if ( !resizedImage )
+    {
+        printf( "Failed to allocate memory for resized image (%ib)", width*height*numberOfChannels );
+        exit( PTERM_MEMORY_ERROR );
+    }
+
+    Int outputSize =
+        width * height                      // <-- number of pixels
+        * (ansiColorSize+1)                 // <-- payload
+        + width * (1+ansiColorResetSize);   // <-- newlines with color resets
     UChar* output = (UChar*) malloc( outputSize );
 
     if ( !output )
     {
         printf( "Failed to allocate output of size %i\n", outputSize );
-        return PTERM_MEMORY_ERROR;
+        exit( PTERM_MEMORY_ERROR );
     }
 
-    PTERM_DEBUG_PRINTF( "Allocated %i bytes for the output\n", outputSize );
-
-    // Assemble output
-    UChar* currentOutput = output;
-
-    for ( UInt rowIndex=0; rowIndex<imageHeight; ++rowIndex )
+    // Loop through frames
+    for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=imageWidth*imageHeight*numberOfChannels )
     {
-        for ( UInt columnIndex=0; columnIndex<imageWidth; ++columnIndex )
+
+        // Resize the image
+        Int resizeOutput = resizeImage( frame,
+                                        resizedImage,
+                                        imageWidth,
+                                        imageHeight,
+                                        numberOfChannels,
+                                        width,
+                                        height );
+
+        if ( resizeOutput )
+            exit( resizeOutput );
+
+        PTERM_DEBUG_PRINTF( "Allocated %i bytes for the output\n", outputSize );
+
+        // Assemble output
+        UChar* currentOutput = output;
+
+        for ( UInt rowIndex=0; rowIndex<height; ++rowIndex )
         {
-            getPixel( image, pixel, rowIndex, columnIndex, imageWidth, imageHeight, numberOfChannels );
-            initializeANSIColorCode( currentOutput, backgroundOnly );
-            updateANSIColorCode( pixel[0], pixel[1], pixel[2], currentOutput );
+            for ( UInt columnIndex=0; columnIndex<width; ++columnIndex )
+            {
+                getPixel( resizedImage, pixel, rowIndex, columnIndex, width, height, numberOfChannels );
+                initializeANSIColorCode( currentOutput, backgroundOnly );
+                updateANSIColorCode( pixel[0], pixel[1], pixel[2], currentOutput );
 
-            currentOutput += ansiColorSize;
+                currentOutput += ansiColorSize;
 
-            if ( backgroundOnly )
-                *currentOutput++ = ' ';
-            else
-                *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+                if ( backgroundOnly )
+                    *currentOutput++ = ' ';
+                else
+                    *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
 
-        } // for column
+            } // for column
 
-        insertANSIReset( currentOutput );
-        currentOutput += ansiColorResetSize;
-        
-        *currentOutput++ = '\n';
+            insertANSIReset( currentOutput );
+            currentOutput += ansiColorResetSize;
+            
+            *currentOutput++ = '\n';
 
-    } // for row
+        } // for row
 
-    *currentOutput = '\0';
+        *currentOutput = '\0';
 
-    // Print
-    printf( "%s%s", output, ansiColorReset );
+        // Print
+        printf( "%s%s", output, ansiColorReset );
+    }
 
-    free(image);
+    free(data);
+    free(resizedImage);
+    free(delays);
     free(pixel);
     free(output);
 
