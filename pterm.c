@@ -14,7 +14,9 @@
 
 
 
-#define PTERM_DEBUG
+// Compile options set in CMake
+//#define PTERM_DEBUG     // <-- print debug output
+//#define PTERM_NOCHAR    // <-- color background instead of characters
 
 
 
@@ -82,21 +84,30 @@ const Int ansiColorResetSize = 4;
 const UChar ansiColorReset[] = "\e[0m";
 
 
-/// Note: ansi must be at least ansiColorMaxSize long
+/// Note: ansi must be at least ansiColorSize long
 void initializeANSIColorCode( UChar* ansi )
 {
-    ansi[0] = '\e';     ansi[1] = '[';
-    ansi[2] = '3';      ansi[3] = '8';      ansi[4] = ';';
-    ansi[5] = '2';      ansi[6] = ';';
+    ansi[0] = '\e';
+    ansi[1] = '[';
+
+    #ifdef PTERM_NOCHAR
+    ansi[2] = '4';  // <-- colored background
+    #else
+    ansi[2] = '3';  // <-- colored character
+    #endif
+
+    ansi[3] = '8';
+    ansi[4] = ';';
+    ansi[5] = '2';
+    ansi[6] = ';';
 
     ansi[10] = ';';
     ansi[14] = ';';
-
     ansi[18] = 'm';
 }
 
 
-/// Note: ansi must be at least ansiColorMaxSize long
+/// Note: ansi must be at least ansiColorSize long
 void updateANSIColorCode( UChar red, UChar green, UChar blue, UChar* ansi )
 {
     ansi[7] = (red / 100)+'0';
@@ -110,6 +121,14 @@ void updateANSIColorCode( UChar red, UChar green, UChar blue, UChar* ansi )
     ansi[15] = (blue / 100)+'0';
     ansi[16] = ((blue%100) / 10)+'0';
     ansi[17] = (blue%10)+'0';
+}
+
+
+/// Note: ansi must be at least ansiColorResetSize long
+void insertANSIReset( UChar* ansi )
+{
+    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
+        *ansi = *c;
 }
 
 
@@ -245,7 +264,6 @@ int main( int argc, char const* argv[] )
         return resizeOutput;
 
     // Allocate and initialize
-    UChar character = ' ';
     UChar* pixel = (UChar*) malloc( numberOfChannels );
 
     if ( !pixel )
@@ -255,9 +273,9 @@ int main( int argc, char const* argv[] )
     }
 
     Int outputSize =
-        imageWidth * imageHeight    // <-- number of pixels
-        * (ansiColorSize+1)         // <-- payload
-        + imageWidth;               // <-- newlines
+        imageWidth * imageHeight                // <-- number of pixels
+        * (ansiColorSize+1)                     // <-- payload
+        + imageWidth * (1+ansiColorResetSize);  // <-- newlines with color resets
 
     UChar* output = (UChar*) malloc( outputSize );
 
@@ -282,10 +300,17 @@ int main( int argc, char const* argv[] )
 
             currentOutput += ansiColorSize;
 
+            #ifdef PTERM_NOCHAR
+            *currentOutput++ = ' ';
+            #else
             *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+            #endif
 
         } // for column
 
+        insertANSIReset( currentOutput );
+        currentOutput += ansiColorResetSize;
+        
         *currentOutput++ = '\n';
 
     } // for row
