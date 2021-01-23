@@ -9,4 +9,7 @@ endif()
 
 include_directories( "${CMAKE_CURRENT_SOURCE_DIR}" )
 add_executable( pterm "${CMAKE_CURRENT_SOURCE_DIR}/pterm.c" )
-target_link_libraries( pterm m )
+
+if( NOT WIN32 )
+    target_link_libraries( pterm m )
+endif()
