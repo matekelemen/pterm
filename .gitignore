@@ -1,4 +1,13 @@
 *.pyc
 *.pyd
 *.log
+*.lib
 __pycache__
+
+# Linux
+*.o
+*.so
+pterm
+
+# Windows
+*.exe
