@@ -2,6 +2,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
+
 // --- STL Includes ---
 #include <stdio.h>
 
@@ -58,12 +61,12 @@ const UChar asciiIntensityTable[]   = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 
 // ------------------------------------------------------------------------------------
 
 // Get parent terminal size on linux
-void getTerminalSize( Int* width, Int* height )
+void getTerminalSize( Int* rows, Int* columns )
 {
     struct winsize w;
     ioctl( STDOUT_FILENO, TIOCGWINSZ, &w );
-    *width = w.ws_row;
-    *height = w.ws_col;
+    *rows = w.ws_row - 1;   // -1 for newline at the end
+    *columns = w.ws_col;
 }
 
 
@@ -76,7 +79,7 @@ const Int ansiColorSize = 19;
 
 // \e[0m
 const Int ansiColorResetSize = 4;
-const Char ansiColorReset[] = "\e[0m";
+const UChar ansiColorReset[] = "\e[0m";
 
 
 /// Note: ansi must be at least ansiColorMaxSize long
@@ -115,12 +118,12 @@ void updateANSIColorCode( UChar red, UChar green, UChar blue, UChar* ansi )
 // ------------------------------------------------------------------------------------
 
 // Read pixel from loaded image
-void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int numberOfRows, Int numberOfColumns, Int numberOfChannels )
+void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
 {
-    const Char* pixelBegin = image + rowIndex * numberOfColumns*numberOfChannels + columnIndex;
-    const Char* pixelEnd   = pixelBegin + numberOfChannels;
+    const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
+    const UChar* pixelEnd   = pixelBegin + numberOfChannels;
 
-    for ( const Char* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
+    for ( const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
         *pixel = *it_component;
 }
 
@@ -138,6 +141,51 @@ UChar getASCIIFromRGB( UChar red, UChar green, UChar blue )
 }
 
 
+Int fitImageToTerminal( UChar** image, Int* imageWidth, Int* imageHeight, Int numberOfChannels, Int terminalColumns, Int terminalRows )
+{
+    Int w = *imageWidth;
+    Int h = *imageHeight;
+
+    if ( terminalColumns < w )
+    {
+        h = (terminalColumns*h) / w / 2;
+        w = terminalColumns;
+    }
+    if ( terminalRows < h )
+    {
+        w = (terminalRows*w) / h;
+        h = terminalRows;
+    }
+
+    if ( w != *imageWidth || h != *imageHeight )
+    {
+        PTERM_DEBUG_PRINTF( "Resizing image to %ix%i\n", w, h );
+
+        UChar* newImage = (UChar*) malloc( w * h * numberOfChannels );
+        Int resizeResult = stbir_resize_uint8(
+            *image, *imageWidth, *imageHeight, 0,
+            newImage, w, h, 0, numberOfChannels
+        );
+
+        if ( !newImage || !resizeResult )
+        {
+            printf( "Resizing image to %ix%i failed\n", w, h );
+            return PTERM_FAIL;
+        }
+
+        free(*image);
+
+        *image = newImage;
+        *imageWidth = w;
+        *imageHeight = h;
+
+        PTERM_DEBUG_PRINTF( "Resizing to %ix%i successful\n", *imageWidth, *imageHeight );
+    }
+
+    return 0;
+}
+
+
 // ------------------------------------------------------------------------------------
 // MAIN
 // ------------------------------------------------------------------------------------
@@ -151,10 +199,10 @@ int main( int argc, char const* argv[] )
         return PTERM_ARGUMENT_ERROR;
     }
 
-    // Load image
+    // Load image (convert to 3 channels, hopefully RGB)
     const Char* fileName = argv[1];
-    Int numberOfRows=0, numberOfColumns=0, numberOfChannels=0;
-    UChar* image = stbi_load( fileName, &numberOfRows, &numberOfColumns, &numberOfChannels, 0 );
+    Int imageWidth=0, imageHeight=0, numberOfChannels=0;
+    UChar* image = stbi_load( fileName, &imageWidth, &imageHeight, &numberOfChannels, 3 );
 
     if ( !image )
     {
@@ -162,48 +210,58 @@ int main( int argc, char const* argv[] )
         return PTERM_INPUT_ERROR;
     }
 
-    if ( !numberOfRows || !numberOfColumns || !numberOfChannels )
+    if ( !imageHeight || !imageWidth || !numberOfChannels )
     {
-        printf( "Empty image with %i rows, %i columns, and %i channels\n", numberOfRows, numberOfColumns, numberOfChannels );
+        printf( "Empty image %ix%ix%i\n", imageWidth, imageHeight, numberOfChannels );
         return PTERM_INPUT_ERROR;
     }
 
     if ( numberOfChannels != 3 )
     {
-        printf( "Unsupported number of channels (%i). RGB only!", numberOfChannels );
-        return PTERM_INPUT_ERROR;
+        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Converting it to RGB...\n", numberOfChannels );
+        numberOfChannels = 3;
+        //printf( "Unsupported number of channels (%i). RGB only!\n", numberOfChannels );
+        //return PTERM_INPUT_ERROR;
     }
 
-    PTERM_DEBUG_PRINTF( "Successfully loaded image with %i rows, %i columns, and %i channels\n", numberOfRows, numberOfColumns, numberOfChannels );
+    PTERM_DEBUG_PRINTF( "Successfully loaded %ix%ix%i image\n", imageWidth, imageHeight, numberOfChannels );
 
     // Load environment
-    Int terminalWidth=0, terminalHeight=0;
-    getTerminalSize( &terminalWidth, &terminalHeight );
+    Int terminalRows=0, terminalColumns=0;
+    getTerminalSize( &terminalRows, &terminalColumns );
 
-    if ( !terminalWidth || !terminalHeight )
+    if ( !terminalRows || !terminalColumns )
     {
-        printf( "Invalid terminal size: %ix%i", terminalWidth, terminalHeight );
+        printf( "Invalid terminal size: %ix%i", terminalColumns, terminalRows );
         return PTERM_ENVIRONMENT_ERROR;
     }
 
-    PTERM_DEBUG_PRINTF( "Detected %ix%i terminal\n", terminalWidth, terminalHeight );
+    PTERM_DEBUG_PRINTF( "Detected %ix%i terminal\n", terminalColumns, terminalRows );
+
+    // Resize the image
+    Int resizeOutput = fitImageToTerminal( &image, &imageWidth, &imageHeight, numberOfChannels, terminalColumns, terminalRows );
+
+    if ( resizeOutput )
+        return resizeOutput;
 
     // Allocate and initialize
-    Char character = ' ';
-
-    UChar* pixel = (UChar*) malloc( numberOfChannels + 1 );
-    pixel[numberOfChannels] = '\0';
+    UChar character = ' ';
+    UChar* pixel = (UChar*) malloc( numberOfChannels );
 
     if ( !pixel )
     {
-        printf( "Failed to allocate pixel of size %i\n", numberOfChannels + 1 );
+        printf( "Failed to allocate pixel of size %i\n", numberOfChannels );
         return PTERM_MEMORY_ERROR;
     }
 
-    Int outputSize = numberOfRows * numberOfColumns * (ansiColorSize+1) + numberOfColumns;
+    Int outputSize =
+        imageWidth * imageHeight    // <-- number of pixels
+        * (ansiColorSize+1)         // <-- payload
+        + imageWidth;               // <-- newlines
+
     UChar* output = (UChar*) malloc( outputSize );
 
-    if ( !pixel || !output )
+    if ( !output )
     {
         printf( "Failed to allocate output of size %i\n", outputSize );
         return PTERM_MEMORY_ERROR;
@@ -214,29 +272,28 @@ int main( int argc, char const* argv[] )
     // Assemble output
     UChar* currentOutput = output;
 
-    for ( UInt rowIndex=0; rowIndex<numberOfRows; ++rowIndex )
+    for ( UInt rowIndex=0; rowIndex<imageHeight; ++rowIndex )
     {
-        for ( UInt columnIndex=0; columnIndex<numberOfColumns; ++columnIndex )
+        for ( UInt columnIndex=0; columnIndex<imageWidth; ++columnIndex )
         {
-            getPixel( image, pixel, rowIndex, columnIndex, numberOfRows, numberOfColumns, numberOfChannels );
+            getPixel( image, pixel, rowIndex, columnIndex, imageWidth, imageHeight, numberOfChannels );
             initializeANSIColorCode( currentOutput );
             updateANSIColorCode( pixel[0], pixel[1], pixel[2], currentOutput );
 
             currentOutput += ansiColorSize;
 
-            *(currentOutput++) = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+            *currentOutput++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
 
         } // for column
 
-        *(currentOutput++) = '\n';
+        *currentOutput++ = '\n';
 
     } // for row
 
     *currentOutput = '\0';
 
     // Print
-    puts( output );
-    printf( "%s\n", ansiColorReset );
+    printf( "%s%s", output, ansiColorReset );
 
     return PTERM_SUCCESS;
 }
