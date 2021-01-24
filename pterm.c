@@ -430,7 +430,7 @@ int main( int argc, char const* argv[] )
 
     if ( !terminalRows || !terminalColumns )
     {
-        printf( "Invalid terminal size: %ix%i", terminalColumns, terminalRows );
+        printf( "Invalid terminal size: %ix%i\n", terminalColumns, terminalRows );
         return PTERM_ENVIRONMENT_ERROR;
     }
 
