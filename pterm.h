@@ -80,14 +80,25 @@ UChar* textFromImageInMemory( const UChar* image,
                               UInt targetHeight,
                               Bool backgroundOnly );
 
+/// Allocate memory for an ANSI colored text 'image'
+/**
+ * @param textImage pointer to unsigned char array
+ * @param size allocated memory in bytes
+ * @param width text image width
+ * @param height text image height
+ */
+void allocateANSITextImage( UChar** textImage,
+                            UInt* size,
+                            UInt width,
+                            UInt height );
+
 /// Convert image to text
 /**
  * Convert an 8-bit-per channel image into ANSI-colored text. No allocations/deallocations
  * are performed internally, so the destination array must have enough space for the output.
  * This function is called from @ref{textFromImageInMemory}, and can be used to make the
  * conversion of animated GIFs more efficient.
- * If you want to call this function yourself, check @ref{textFromImageInMemory} to see how
- * much memory must be allocated in advance.
+ * If you want to call this function yourself, allocate with @ref{allocateANSITextImage} first.
  * 
  * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
  * @param destination output array (must have proper size)
@@ -422,6 +433,28 @@ UChar* loadImageFile( const Char* fileName,
 }
 
 
+void allocateANSITextImage( UChar** textImage,
+                            UInt* size,
+                            UInt width,
+                            UInt height )
+{
+    *textImage = NULL;
+    *size      = 0;
+
+    *size =
+        width * height                      // <-- number of 'pixels'
+        + (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
+        + width * (ansiColorResetSize + 1); // <-- new line and color reset at line ends
+    *textImage = (UChar*) malloc( *size );
+
+    if ( !*textImage )
+    {
+        PTERM_DEBUG_PRINTF( "Failed to allocate memory for text image (%ib)\n", *size );
+        *size = 0;
+    }
+}
+
+
 UChar* textFromImageInMemory( const UChar* image,
                               UInt width,
                               UInt height,
@@ -455,17 +488,12 @@ UChar* textFromImageInMemory( const UChar* image,
     } // if resize
 
     // Allocate output
-    UInt outputSize =
-        targetWidth * targetHeight                  // <-- number of 'pixels'
-        + (ansiColorSize + 1)                       // <-- payload (ANSI color and a character)
-        + width * (ansiColorResetSize + 1);         // <-- new line and color reset at line ends
-    UChar* output = (UChar*) malloc( outputSize );
+    UInt outputSize = 0;
+    UChar* output = NULL;
+    allocateANSITextImage( &output, &outputSize, targetWidth, targetHeight );
 
     if ( !output )
-    {
-        PTERM_DEBUG_PRINTF( "Failed to allocate memory for output (%ib)\n", outputSize );
         return NULL;
-    }
 
     // Assemble output
     _textFromImageInMemory( frame,

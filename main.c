@@ -20,12 +20,6 @@
 
 
 
-
-
-// ------------------------------------------------------------------------------------
-// ENVIRONMENT
-// ------------------------------------------------------------------------------------
-
 /// Get parent terminal size on linux
 void getTerminalSize( Int* rows, Int* columns )
 {
@@ -48,9 +42,6 @@ void getTerminalSize( Int* rows, Int* columns )
         *columns = w.ws_col;
     #endif
 }
-
-
-
 
 
 void printHelp()
@@ -113,12 +104,6 @@ Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgr
 
 
 
-
-
-// ------------------------------------------------------------------------------------
-// MAIN
-// ------------------------------------------------------------------------------------
-
 int main( int argc, char const* argv[] )
 {
     // Init
@@ -180,11 +165,9 @@ int main( int argc, char const* argv[] )
         exit( PTERM_MEMORY_ERROR );
     }
 
-    Int outputSize =
-        width * height                      // <-- number of pixels
-        * (ansiColorSize+1)                 // <-- payload
-        + width * (1+ansiColorResetSize);   // <-- newlines with color resets
-    UChar* output = (UChar*) malloc( outputSize );
+    UInt outputSize = 0;
+    UChar* output = NULL;
+    allocateANSITextImage( &output, &outputSize, width, height );
 
     if ( !output )
     {
