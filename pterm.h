@@ -1,0 +1,539 @@
+// --- External Includes ---
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
+
+// --- STL Includes ---
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+
+
+// Compile options set in CMake
+//#define PTERM_DEBUG     // <-- print debug output
+
+// Type aliases
+typedef int             Int;
+typedef unsigned int    UInt;
+typedef char            Char;
+typedef unsigned char   UChar;
+typedef UInt            Bool;
+
+
+// ------------------------------------------------------------------------------------
+// INTERFACE
+// ------------------------------------------------------------------------------------
+
+/// Load an image and get its relevant properties
+/**
+ * Load a file into memory and decode it with stb_image. The returned unsigned char
+ * array contains all frames of the input file with 8 bits per channel in the
+ * following layout: [frame,row,column,channel]
+ * 
+ * Memory is allocated for reading the file, and for converting it to image frames
+ * (the former is deallocated internally). An additional chunk of memory is allocated
+ * for frame delays as well, even if the image file consists of a single frame
+ * (meaning that the frame delays will always have to be deallocated too).
+ * 
+ * The original frames may have 1..4 channels, but are ultimately converted to RGB, so the
+ * output always has 3 channels.
+ * Supported image formats: JPEG, PNG, TGA, BMP, PSD, GIF, HDR, PIC, PNM
+ * (see details at https://github.com/nothings/stb/blob/master/stb_image.h)
+ * 
+ * @param fileName path to an image file
+ * @param numberOfFrames number of frames in the source image (only animated GIFs have more than 1)
+ * @param frameDelaysMS delays between consecutive frames in milliseconds (always stores at least 1 value)
+ * @param width width of the source image
+ * @param height height of the source image
+ * @param numberOfOriginalChannels number of channels in the source image
+ * @param numberOfOutputChannels number of channels in the loaded image (always set to 3 for RGB)
+ */
+UChar* loadImageFile( const Char* fileName,
+                      UInt* numberOfFrames,
+                      Int** frameDelaysMS,
+                      UInt* width,
+                      UInt* height,
+                      UInt* numberOfOriginalChannels,
+                      UInt* numberOfOutputChannels );
+
+/// Convert image to text
+/**
+ * Convert an 8-bit-per-channel image into ANSI-colored text. The function allocates memory
+ * for the output internally. An additional internal allocation happens if the user requests
+ * a resized image, which is then deallocated before returning.
+ * 
+ * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
+ * @param width image width (number of columns)
+ * @param height image height (number of rows)
+ * @param numberOfChannels number of components per pixel
+ * @param targetWidth width of the desired output 'image' (without ANSI sequences and new lines).
+ * @param targetHeight height of the desired output 'image'
+ * @param backgroundOnly fill text with colored background instead of ASCII characters
+ */
+UChar* textFromImageInMemory( const UChar* image,
+                              UInt width,
+                              UInt height,
+                              UInt numberOfChannels,
+                              UInt targetWidth,
+                              UInt targetHeight,
+                              Bool backgroundOnly );
+
+/// Convert image to text
+/**
+ * Convert an 8-bit-per channel image into ANSI-colored text. No allocations/deallocations
+ * are performed internally, so the destination array must have enough space for the output.
+ * This function is called from @ref{textFromImageInMemory}, and can be used to make the
+ * conversion of animated GIFs more efficient.
+ * If you want to call this function yourself, check @ref{textFromImageInMemory} to see how
+ * much memory must be allocated in advance.
+ * 
+ * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
+ * @param destination output array (must have proper size)
+ * @param width input image width
+ * @param height input image height
+ * @param numberOfChannels number of pixel components in the input image
+ * @param backgoundOnly fill text with colored background instead of ASCII characters
+ */
+void _textFromImageInMemory( const UChar* image,
+                             UChar* destination,
+                             UInt width,
+                             UInt height,
+                             UInt numberOfChannels,
+                             Bool backgroundOnly );
+
+
+// ------------------------------------------------------------------------------------
+// PREPROCESSOR
+// ------------------------------------------------------------------------------------
+
+// Exit codes
+#define PTERM_SUCCESS           0
+#define PTERM_FAIL              1
+#define PTERM_ARGUMENT_ERROR    2
+#define PTERM_INPUT_ERROR       3
+#define PTERM_MEMORY_ERROR      4
+#define PTERM_ENVIRONMENT_ERROR 5
+#define PTERM_IO_ERROR          6
+
+// Other
+#define PTERM_TRUE              1
+#define PTERM_FALSE             0
+
+// Macro switch for debug printing
+#ifdef PTERM_DEBUG
+    #define PTERM_DEBUG_PRINTF( ... )   \
+    printf( __VA_ARGS__ )
+#else
+    #define PTERM_DEBUG_PRINTF( ... )
+#endif
+
+
+// ------------------------------------------------------------------------------------
+// IMPLEMENTATION
+// ------------------------------------------------------------------------------------
+
+#ifdef PTERM_IMPLEMENTATION
+
+
+/// --- Utility --- ///
+
+void copyString( const Char* source, Char** destination )
+{
+    UInt sourceSize = 0;
+    while( PTERM_TRUE ) { if ( source[sourceSize++] == '\0' ) break; }
+    
+    *destination = (Char*) malloc( sourceSize );
+    strcpy( *destination, source );
+}
+
+
+UChar* loadFile( const Char* fileName, UInt* size )
+{
+    UChar* data = NULL;
+    *size = 0;
+
+    if ( fileName )
+    {
+        errno = 0;
+        FILE* file = fopen( fileName, "rb" );
+
+        if ( file )
+        {
+            // Get file size
+            fseek( file, 0, SEEK_END );
+            Int fileSize = ftell(file);
+            fseek( file, 0, SEEK_SET );
+
+            if ( fileSize )
+            {
+                // Allocate memory
+                data = (UChar*) malloc( fileSize * sizeof(UChar) );
+                *size = (UInt) fread( data, sizeof(UChar), fileSize, file );
+            }
+            else
+                PTERM_DEBUG_PRINTF( "%s\n", "WARNING: empty file" );
+        } // if file
+        else
+        {
+            printf( "Failed to open %s (%s)\n", fileName, strerror(errno) );
+            exit( PTERM_INPUT_ERROR );
+        } // if !file
+    }
+    else
+    {
+        puts( "No file name provided!" );
+        exit( PTERM_INPUT_ERROR );
+    }
+
+    return data;
+}
+
+
+const Char* fileExtension( const Char* fileName )
+{
+    const Char* extension = fileName;
+    const Char* tmp = fileName;
+
+    while ( *tmp != '\0' )
+    {
+        if ( *tmp == '.' )
+            extension = tmp;
+        ++tmp;
+    }
+
+    if ( extension == fileName ) // no extension
+        extension = tmp;
+
+    return extension;
+}
+
+
+/// --- ANSI STUFF --- ///
+
+// Example: \e[38;2;255;255;255m
+const Int ansiColorSize = 19;
+
+// \e[0m
+const Int ansiColorResetSize = 4;
+const UChar ansiColorReset[] = "\e[0m";
+
+
+/// Note: ansi must be allocated and at least [ansiColorSize] long
+void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly )
+{
+    ansi[0] = '\e';
+    ansi[1] = '[';
+
+    if ( backgroundOnly )
+        ansi[2] = '4';  // <-- colored background
+    else
+        ansi[2] = '3';  // <-- colored character
+
+    ansi[3] = '8';
+    ansi[4] = ';';
+    ansi[5] = '2';
+    ansi[6] = ';';
+
+    ansi[7] = (red / 100)+'0';
+    ansi[8] = ((red%100) / 10)+'0';
+    ansi[9] = (red%10)+'0';
+    ansi[10] = ';';
+
+    ansi[11] = (green / 100)+'0';
+    ansi[12] = ((green%100) / 10)+'0';
+    ansi[13] = (blue%10)+'0';
+    ansi[14] = ';';
+
+    ansi[15] = (blue / 100)+'0';
+    ansi[16] = ((blue%100) / 10)+'0';
+    ansi[17] = (blue%10)+'0';
+    ansi[18] = 'm';
+}
+
+
+/// Note: ansi must be allocated and at least [ansiColorResetSize] long
+void ansiReset( UChar* ansi )
+{
+    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
+        *ansi = *c;
+}
+
+
+/// --- IMAGE UTILITIES --- ///
+
+void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
+{
+    const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
+    const UChar* pixelEnd   = pixelBegin + numberOfChannels;
+
+    for ( const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
+        *pixel = *it_component;
+}
+
+// Linear map: grayscale value -> ASCII character
+const UInt asciiIntensityTableSize = 15;
+const UChar asciiIntensityTable[] = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 'f', 'L', 'C', 'G', '0', '8', '@' };
+
+UChar getASCIIFromGrayScale( UChar value )
+{
+    UInt key = ((asciiIntensityTableSize-1) * value) / 256;
+    return asciiIntensityTable[key];
+}
+
+
+UChar getASCIIFromRGB( UChar red, UChar green, UChar blue )
+{
+    return getASCIIFromGrayScale( 0.2989*red + 0.587*green + 0.114*blue );
+}
+
+
+void fitImageSize( Int* width, Int* height, Int targetWidth, Int targetHeight )
+{
+    if ( targetWidth < *width )
+    {
+        *height = (targetWidth*(*height)) / (*width) / 2;
+        *width = targetWidth;
+    }
+    if ( targetHeight < *height )
+    {
+        *width = (targetHeight*(*width)) / (*height);
+        *height = targetHeight;
+    }
+}
+
+
+Int resizeImage( const UChar* image, UChar* newImage, Int width, Int height, Int numberOfChannels, Int newWidth, Int newHeight )
+{
+    PTERM_DEBUG_PRINTF( "Resizing image to %ix%i\n", newWidth, newHeight );
+
+    Int resizeResult = stbir_resize_uint8(
+        image, width, height, 0,
+        newImage, newWidth, newHeight, 0, numberOfChannels
+    );
+
+    if ( !*newImage || !resizeResult )
+    {
+        printf( "Resizing image to %ix%i failed\n", newWidth, newHeight );
+        return PTERM_FAIL;
+    }
+
+    return PTERM_SUCCESS;
+}
+
+
+UChar* loadImageFile( const Char* fileName,
+                      UInt* numberOfFrames,
+                      Int** frameDelaysMS,
+                      UInt* width,
+                      UInt* height,
+                      UInt* numberOfOriginalChannels,
+                      UInt* numberOfOutputChannels )
+{
+    // Init
+    *numberOfFrames           = 0;
+    *frameDelaysMS            = NULL;
+    *width                    = 0;
+    *height                   = 0;
+    *numberOfOriginalChannels = 0;
+
+    // Load file
+    UInt fileSize = 0;
+    UChar* data = loadFile( fileName, &fileSize );
+
+    if ( !data )
+    {
+        PTERM_DEBUG_PRINTF( "Failed to load %s\n", fileName );
+        return NULL;
+    }
+
+    if ( !fileSize )
+        PTERM_DEBUG_PRINTF( "%s is empty!\n", fileName );
+
+    // Check file extension
+    Bool isGIF = PTERM_FALSE;
+    if ( strcmp( fileExtension(fileName), ".gif" ) == 0 )
+        isGIF = PTERM_TRUE;
+
+    // Set output channels
+    *numberOfOutputChannels = 3; // <-- Convert to RGB no matter how many channels the input has
+
+    // Decode frames
+    if ( isGIF == PTERM_TRUE )
+    {
+        UChar* tmp = stbi_load_gif_from_memory(
+            data,
+            fileSize,
+            frameDelaysMS,
+            width,
+            height,
+            numberOfFrames,
+            numberOfOriginalChannels,
+            *numberOfOutputChannels
+        );
+        free(data);
+        data = tmp;
+    } // isGIF
+    else
+    {
+        UChar* tmp = stbi_load_from_memory(
+            data,
+            fileSize,
+            width,
+            height,
+            numberOfOriginalChannels,
+            *numberOfOutputChannels
+        );
+        free(data);
+        data = tmp;
+        
+        *numberOfFrames = 1;
+        *frameDelaysMS = (Int*) malloc( sizeof(Int) );
+
+        if ( !*frameDelaysMS )
+        {
+            PTERM_DEBUG_PRINTF( "Failed to allocate memory for frame delays (%ib)\n", 1 );
+            exit( PTERM_MEMORY_ERROR );
+        }
+
+        (*frameDelaysMS)[0] = 0;
+    } // !isGIF
+
+    if ( !data )
+    {
+        PTERM_DEBUG_PRINTF( "Failed to load image from %s\n", fileName );
+        free( *frameDelaysMS );
+        return NULL;
+    }
+
+    if ( !*width || !*height || !*numberOfOriginalChannels || !*numberOfFrames )
+    {
+        PTERM_DEBUG_PRINTF( "Empty image %ix%ix%i with %i frames\n", *width, *height, *numberOfChannels, *numberOfFrames );
+        free( data );
+        free( *frameDelaysMS );
+        return NULL;
+    }
+
+    if ( *numberOfOriginalChannels != *numberOfOutputChannels )
+        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Convertex it to RGB!\n", *numberOfOriginalChannels );
+
+    return data;
+}
+
+
+UChar* textFromImageInMemory( const UChar* image,
+                              UInt width,
+                              UInt height,
+                              UInt numberOfChannels,
+                              UInt targetWidth,
+                              UInt targetHeight,
+                              Bool backgroundOnly )
+{
+    // Resize image if necessary
+    const UChar* frame = image;
+    if ( width != targetWidth || height != targetHeight )
+    {
+        UChar* tmp = (UChar*) malloc( targetWidth * targetHeight * numberOfChannels );
+        if ( !frame )
+        {
+            PTERM_DEBUG_PRINTF( "Failed to allocate memory for resized image (%ib)\n", targetWidth*targetHeight*numberOfChannels );
+            exit( PTERM_MEMORY_ERROR );
+        }
+
+        Int resizeOutput = resizeImage( image,
+                                        tmp,
+                                        width,
+                                        height,
+                                        numberOfChannels,
+                                        targetWidth,
+                                        targetHeight );
+        if ( resizeOutput )
+            exit( resizeOutput );
+
+        frame = tmp;
+    } // if resize
+
+    // Allocate output
+    UInt outputSize =
+        targetWidth * targetHeight                  // <-- number of 'pixels'
+        + (ansiColorSize + 1)                       // <-- payload (ANSI color and a character)
+        + width * (ansiColorResetSize + 1);         // <-- new line and color reset at line ends
+    UChar* output = (UChar*) malloc( outputSize );
+
+    if ( !output )
+    {
+        PTERM_DEBUG_PRINTF( "Failed to allocate memory for output (%ib)\n", outputSize );
+        return NULL;
+    }
+
+    // Assemble output
+    _textFromImageInMemory( frame,
+                            output,
+                            targetWidth,
+                            targetHeight,
+                            numberOfChannels,
+                            backgroundOnly );
+    
+    // Deallocate if the image was resized
+    if ( width != targetWidth || height != targetHeight )
+        free( (UChar*)frame );
+
+    return output;
+}
+
+
+void _textFromImageInMemory( const UChar* image,
+                             UChar* destination,
+                             UInt width,
+                             UInt height,
+                             UInt numberOfChannels,
+                             Bool backgroundOnly )
+{
+    // Init
+    UChar* pixel = (UChar*) malloc( numberOfChannels );
+
+    if ( !pixel )
+    {
+        PTERM_DEBUG_PRINTF( "Failed to allocate pixel of size %i\n", numberOfChannels );
+        exit( PTERM_MEMORY_ERROR );
+    }
+
+    // Assemble output
+    UChar* cursor = destination;
+
+    for ( UInt rowIndex=0; rowIndex<height; ++rowIndex )
+    {
+        for ( UInt columnIndex=0; columnIndex<width; ++columnIndex )
+        {
+            getPixel( image,
+                      pixel,
+                      rowIndex,
+                      columnIndex,
+                      width,
+                      height,
+                      numberOfChannels );
+
+            ansiColorCode( pixel[0], pixel[1], pixel[2], cursor, backgroundOnly );
+
+            cursor += ansiColorSize;
+
+            if ( backgroundOnly )
+                *cursor++ = ' ';
+            else
+                *cursor++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+        } // for columnIndex
+
+        ansiReset( cursor );
+        cursor += ansiColorResetSize;
+
+        *cursor++ = '\n';
+
+    } // for rowIndex
+
+    *cursor = '\0';
+
+    free(pixel);
+}
+
+#endif // PTERM_IMPLEMENTATION

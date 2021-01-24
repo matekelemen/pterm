@@ -3,7 +3,7 @@ all=pterm
 CFLAGS=-O3 -DNDEBUG
 LIBS=-lm
 
-pterm: pterm.o
+pterm: main.o
 	gcc -o $@ $^ $(LIBS)
 
 clean:
