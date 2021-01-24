@@ -19,8 +19,12 @@
 #include <errno.h>
 #include <time.h>
 
-#include <sys/ioctl.h>  // <--
-#include <unistd.h>     // <-- for getting the terminal's size on linux
+#if _WIN32
+    #include <windows.h>    // <-- for getting the terminal's size in windows
+#else
+    #include <sys/ioctl.h>  // <--
+    #include <unistd.h>     // <-- for getting the terminal's size on linux
+#endif
 
 
 
@@ -77,10 +81,24 @@ const UChar asciiIntensityTable[]   = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 
 /// Get parent terminal size on linux
 void getTerminalSize( Int* rows, Int* columns )
 {
-    struct winsize w;
-    ioctl( STDOUT_FILENO, TIOCGWINSZ, &w );
-    *rows = w.ws_row - 1;   // -1 for newline at the end
-    *columns = w.ws_col;
+    #if _WIN32
+        CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
+        HANDLE terminal = GetStdHandle( STD_OUTPUT_HANDLE );
+        GetConsoleScreenBufferInfo( terminal, &bufferInfo );
+        *rows = bufferInfo.srWindow.Bottom - bufferInfo.srWindow.Top;
+        *columns = bufferInfo.srWindow.Right - bufferInfo.srWindow.Left + 1;
+        
+        DWORD drawMode = 0;
+        GetConsoleMode( terminal, &drawMode );
+        drawMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode( terminal, drawMode );
+        //SetConsoleMode( ENABLE_VIRTUAL_TERMINAL_PROCESSING, 1 );
+    #else
+        struct winsize w;
+        ioctl( STDOUT_FILENO, TIOCGWINSZ, &w );
+        *rows = w.ws_row - 1;   // -1 for newline at the end
+        *columns = w.ws_col;
+    #endif
 }
 
 
