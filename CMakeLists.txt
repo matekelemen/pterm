@@ -8,7 +8,7 @@ if( ${PTERM_ENABLE_DEBUG_OUTPUT} )
 endif()
 
 include_directories( "${CMAKE_CURRENT_SOURCE_DIR}" )
-add_executable( pterm "${CMAKE_CURRENT_SOURCE_DIR}/pterm.c" )
+add_executable( pterm "${CMAKE_CURRENT_SOURCE_DIR}/main.c" )
 
 if( NOT WIN32 )
     target_link_libraries( pterm m )
