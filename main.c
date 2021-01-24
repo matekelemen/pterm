@@ -206,7 +206,7 @@ int main( int argc, char const* argv[] )
         while( difftime(clock(),time) < 1000*delays[frameIndex] ) {}
         time = clock();
 
-        printf( "%s%s", output, ansiColorReset );
+        printf( "%s%s\n", output, ansiColorReset );
     }
 
     free(data);

@@ -37,13 +37,14 @@ typedef UInt            Bool;
  * array contains all frames of the input file with 8 bits per channel in the
  * following layout: [frame,row,column,channel]
  * 
+ * The original frames may have 1..4 channels, but are ultimately converted to RGB, so the
+ * output always has 3 channels.
+ * 
  * Memory is allocated for reading the file, and for converting it to image frames
  * (the former is deallocated internally). An additional chunk of memory is allocated
  * for frame delays as well, even if the image file consists of a single frame
  * (meaning that the frame delays will always have to be deallocated too).
  * 
- * The original frames may have 1..4 channels, but are ultimately converted to RGB, so the
- * output always has 3 channels.
  * Supported image formats: JPEG, PNG, TGA, BMP, PSD, GIF, HDR, PIC, PNM
  * (see details at https://github.com/nothings/stb/blob/master/stb_image.h)
  * 
@@ -448,7 +449,7 @@ void allocateANSITextImage( UChar** textImage,
 
     *size =
         width * height                      // <-- number of 'pixels'
-        + (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
+        * (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
         + width * (ansiColorResetSize + 1); // <-- new line and color reset at line ends
     *textImage = (UChar*) malloc( *size );
 
@@ -564,7 +565,7 @@ void _textFromImageInMemory( const UChar* image,
 
     } // for rowIndex
 
-    *cursor = '\0';
+    *--cursor = '\0';
 
     free(pixel);
 }
