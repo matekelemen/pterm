@@ -5,6 +5,7 @@ Yet another piece of code that draws images in the terminal. Now written in C!
 Bonus support for animated GIFs.
 
 ![](https://github.com/matekelemen/pterm/blob/master/.github/animated_terminal.gif)
+![](https://github.com/matekelemen/pterm/blob/master/.github/colored_background.png)
 
 ## Usage
 
