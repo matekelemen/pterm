@@ -11,6 +11,11 @@
 #include <errno.h>
 
 
+// Define PTERM_IMPLEMENTATION for a single source
+// if you wish to include pterm in your project:
+// #define PTERM_IMPLEMENTATION
+
+
 // Compile options set in CMake
 //#define PTERM_DEBUG     // <-- print debug output
 

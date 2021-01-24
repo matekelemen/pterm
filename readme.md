@@ -20,6 +20,14 @@ pterm FILE [-b]
 Supported image formats:
 JPEG, PNG, TGA, BMP, PSD, GIF, HDR, PIC, PNM (see details in [stb_image.h](https://github.com/nothings/stb/blob/master/stb_image.h))
 
+## Header
+
+If you wish to include ```pterm``` in your project:
+```
+#define PTERM_IMPLEMENTATION
+```
+before including ```pterm.h``` to create the implementation.
+
 ## Notes
 
 Please don't judge the code, it's just an excercise to prevent me from completely forgetting how to C.
