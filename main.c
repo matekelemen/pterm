@@ -132,6 +132,12 @@ int main( int argc, char const* argv[] )
     free(fileName);
     fileName = NULL;
 
+    if ( numberOfChannels != 4 )
+    {
+        PTERM_DEBUG_PRINTF( "Invalid number of channels (%i)\n", numberOfChannels );
+        exit( PTERM_FAIL );
+    }
+
     // Load environment
     Int terminalRows=0, terminalColumns=0;
     getTerminalSize( &terminalRows, &terminalColumns );
@@ -146,7 +152,7 @@ int main( int argc, char const* argv[] )
 
     // Allocate and initialize
     UChar* frame = data;
-    UChar* pixel = (UChar*) malloc( numberOfChannels );
+    UChar pixel[4];
 
     if ( !pixel )
     {
@@ -193,8 +199,6 @@ int main( int argc, char const* argv[] )
         if ( resizeOutput )
             exit( resizeOutput );
 
-        PTERM_DEBUG_PRINTF( "Allocated %i bytes for the output\n", outputSize );
-
         _textFromImageInMemory( resizedImage,
                                 output,
                                 width,
@@ -203,16 +207,21 @@ int main( int argc, char const* argv[] )
                                 backgroundOnly );
 
         // Print
-        while( difftime(clock(),time) < 1000*delays[frameIndex] ) {}
+        double sleepTime = difftime( clock(), time );
+        if ( 0 < sleepTime )
+            usleep( sleepTime );
         time = clock();
 
-        printf( "%s%s\n", output, ansiColorReset );
+        fwrite( output, sizeof(UChar), outputSize, stdout );
+        fflush( stdout );
+        //printf( "%s%s\n", output, ansiColorReset );
     }
+
+    fwrite( ansiColorReset, sizeof(UChar), ansiColorResetSize, stdout );
 
     free(data);
     free(resizedImage);
     free(delays);
-    free(pixel);
     free(output);
 
     return PTERM_SUCCESS;

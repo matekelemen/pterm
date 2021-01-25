@@ -37,8 +37,8 @@ typedef UInt            Bool;
  * array contains all frames of the input file with 8 bits per channel in the
  * following layout: [frame,row,column,channel]
  * 
- * The original frames may have 1..4 channels, but are ultimately converted to RGB, so the
- * output always has 3 channels.
+ * The original frames may have 1..4 channels, but are ultimately converted to RGBA, so the
+ * output always has 4 channels.
  * 
  * Memory is allocated for reading the file, and for converting it to image frames
  * (the former is deallocated internally). An additional chunk of memory is allocated
@@ -54,7 +54,7 @@ typedef UInt            Bool;
  * @param width width of the source image
  * @param height height of the source image
  * @param numberOfOriginalChannels number of channels in the source image
- * @param numberOfOutputChannels number of channels in the loaded image (always set to 3 for RGB)
+ * @param numberOfOutputChannels number of channels in the loaded image (always set to 4 for RGBA)
  */
 UChar* loadImageFile( const Char* fileName,
                       UInt* numberOfFrames,
@@ -105,6 +105,8 @@ void allocateANSITextImage( UChar** textImage,
  * This function is called from @ref{textFromImageInMemory}, and can be used to make the
  * conversion of animated GIFs more efficient.
  * If you want to call this function yourself, allocate with @ref{allocateANSITextImage} first.
+ * 
+ * @note the image is expected to have 4 channels for RGBA
  * 
  * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
  * @param destination output array (must have proper size)
@@ -270,9 +272,16 @@ void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgr
 }
 
 
+/// Note: ansi must be allocated and at least [ansiColorResetSize] long
+void ansiReset( UChar* ansi )
+{
+    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
+        *ansi = *c;
+}
+
+
 /**
  * Fill up the array with characters that won't be displayed.
- * An additional '\r' is expetcted at ansi[ansiColorSize]
  * @note ansi must be allocated and at least [ansiColorSize] long.
  */ 
 void ansiPadding( UChar* ansi )
@@ -280,7 +289,7 @@ void ansiPadding( UChar* ansi )
     ansi[0] = '\e';
     ansi[1] = '[';
     ansi[2] = '1';
-    ansi[3] = '0';
+    ansi[3] = '1';
     ansi[4] =  ';';
     ansi[5] =  '3';
     ansi[6] =  '1';
@@ -296,14 +305,6 @@ void ansiPadding( UChar* ansi )
     ansi[16] = '\b';
     ansi[17] = ' ';
     ansi[18] = '\b';
-}
-
-
-/// Note: ansi must be allocated and at least [ansiColorResetSize] long
-void ansiReset( UChar* ansi )
-{
-    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
-        *ansi = *c;
 }
 
 
@@ -479,7 +480,8 @@ void allocateANSITextImage( UChar** textImage,
     *size =
         width * height                      // <-- number of 'pixels'
         * (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
-        + width * (ansiColorResetSize + 1); // <-- new line and color reset at line ends
+        + width * (ansiColorResetSize + 1)  // <-- new line and color reset at line ends
+        + 1;                                // <-- \0
     *textImage = (UChar*) malloc( *size );
 
     if ( !*textImage )
@@ -577,7 +579,7 @@ void _textFromImageInMemory( const UChar* image,
                       height,
                       numberOfChannels );
 
-            if ( pixel[3] )
+            if ( 0 < pixel[3] )
             {
                 ansiColorCode( pixel[0], pixel[1], pixel[2], cursor, backgroundOnly );
 
@@ -603,7 +605,7 @@ void _textFromImageInMemory( const UChar* image,
 
     } // for rowIndex
 
-    *--cursor = '\0';
+    *cursor = '\0';
 }
 
 #endif // PTERM_IMPLEMENTATION
