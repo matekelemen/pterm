@@ -270,6 +270,35 @@ void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgr
 }
 
 
+/**
+ * Fill up the array with characters that won't be displayed.
+ * An additional '\r' is expetcted at ansi[ansiColorSize]
+ * @note ansi must be allocated and at least [ansiColorSize] long.
+ */ 
+void ansiPadding( UChar* ansi )
+{
+    ansi[0] = '\e';
+    ansi[1] = '[';
+    ansi[2] = '1';
+    ansi[3] = '0';
+    ansi[4] =  ';';
+    ansi[5] =  '3';
+    ansi[6] =  '1';
+    ansi[7] =  ';';
+    ansi[8] =  '4';
+    ansi[9] =  '9';
+    ansi[10] = 'm';
+    ansi[11] = ' ';
+    ansi[12] = '\b';
+    ansi[13] = ' ';
+    ansi[14] = '\b';
+    ansi[15] = ' ';
+    ansi[16] = '\b';
+    ansi[17] = ' ';
+    ansi[18] = '\b';
+}
+
+
 /// Note: ansi must be allocated and at least [ansiColorResetSize] long
 void ansiReset( UChar* ansi )
 {
@@ -330,9 +359,9 @@ Int resizeImage( const UChar* image, UChar* newImage, Int width, Int height, Int
         newImage, newWidth, newHeight, 0, numberOfChannels
     );
 
-    if ( !*newImage || !resizeResult )
+    if ( !resizeResult )
     {
-        printf( "Resizing image to %ix%i failed\n", newWidth, newHeight );
+        PTERM_DEBUG_PRINTF( "Image resizing errored out (error %i)\n", resizeResult );
         return PTERM_FAIL;
     }
 
@@ -374,7 +403,7 @@ UChar* loadImageFile( const Char* fileName,
         isGIF = PTERM_TRUE;
 
     // Set output channels
-    *numberOfOutputChannels = 3; // <-- Convert to RGB no matter how many channels the input has
+    *numberOfOutputChannels = 4; // <-- Convert to RGBA no matter how many channels the input has
 
     // Decode frames
     if ( isGIF == PTERM_TRUE )
@@ -426,14 +455,14 @@ UChar* loadImageFile( const Char* fileName,
 
     if ( !*width || !*height || !*numberOfOriginalChannels || !*numberOfFrames )
     {
-        PTERM_DEBUG_PRINTF( "Empty image %ix%ix%i with %i frames\n", *width, *height, *numberOfChannels, *numberOfFrames );
+        PTERM_DEBUG_PRINTF( "Empty image %ix%ix%i with %i frames\n", *width, *height, *numberOfOriginalChannels, *numberOfFrames );
         free( data );
         free( *frameDelaysMS );
         return NULL;
     }
 
     if ( *numberOfOriginalChannels != *numberOfOutputChannels )
-        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Convertex it to RGB!\n", *numberOfOriginalChannels );
+        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Convertex it to RGBA!\n", *numberOfOriginalChannels );
 
     return data;
 }
@@ -525,7 +554,7 @@ void _textFromImageInMemory( const UChar* image,
                              Bool backgroundOnly )
 {
     // Init
-    UChar* pixel = (UChar*) malloc( numberOfChannels );
+    UChar pixel[4];
 
     if ( !pixel )
     {
@@ -548,14 +577,23 @@ void _textFromImageInMemory( const UChar* image,
                       height,
                       numberOfChannels );
 
-            ansiColorCode( pixel[0], pixel[1], pixel[2], cursor, backgroundOnly );
+            if ( pixel[3] )
+            {
+                ansiColorCode( pixel[0], pixel[1], pixel[2], cursor, backgroundOnly );
 
-            cursor += ansiColorSize;
+                cursor += ansiColorSize;
 
-            if ( backgroundOnly )
-                *cursor++ = ' ';
+                if ( backgroundOnly )
+                    *cursor++ = ' ';
+                else
+                    *cursor++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+            }
             else
-                *cursor++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+            {
+                ansiPadding( cursor );
+                cursor += ansiColorSize;
+                *cursor++ = ' ';
+            }
         } // for columnIndex
 
         ansiReset( cursor );
@@ -566,8 +604,6 @@ void _textFromImageInMemory( const UChar* image,
     } // for rowIndex
 
     *--cursor = '\0';
-
-    free(pixel);
 }
 
 #endif // PTERM_IMPLEMENTATION
