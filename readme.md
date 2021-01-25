@@ -4,9 +4,16 @@ Yet another piece of code that draws images in the terminal. Now written in C!
 
 Bonus support for animated GIFs.
 
-!["Animated" GIF in the terminal](https://github.com/matekelemen/pterm/blob/master/.github/animated_terminal.gif)
-![Colored background without ASCII characters](https://github.com/matekelemen/pterm/blob/master/.github/colored_background.png)
-![Support for alpha channels]()
+---
+
+"Animated" GIF in the terminal
+<img src=".github/animated_terminal.gif" width=600>
+
+Colored background without ASCII characters
+<img src=".github/colored_background.png" width=600>
+
+Alpha channel support
+<img src=".github/alpha.gif" width=600>
 
 ## Usage
 
