@@ -10,6 +10,7 @@
 
 // --- STL Includes ---
 #include <time.h>
+#include <stdio.h>
 
 #if _WIN32
     #include <windows.h>    // <-- for getting the terminal's size in windows
@@ -163,12 +164,43 @@ int main( int argc, char const* argv[] )
     Int width=imageWidth, height=imageHeight;
     fitImageSize( &width, &height, terminalColumns, terminalRows );
 
-    UChar* resizedImage = (UChar*) malloc( width * height * numberOfChannels );
+    UChar* resizedImage;
+    UChar* resizedFrame;
+    UInt resizedFrameSize = width*height*numberOfChannels;
 
-    if ( !resizedImage )
+    // Resize frames if necessary
+    if ( width!=imageWidth || height!=imageHeight )
     {
-        printf( "Failed to allocate memory for resized image (%ib)", width*height*numberOfChannels );
-        exit( PTERM_MEMORY_ERROR );
+        resizedImage = (UChar*) malloc( width * height * numberOfChannels * numberOfFrames );
+        resizedFrame = resizedImage;
+
+        if ( !resizedImage )
+        {
+            printf( "Failed to allocate memory for resized image (%ib)", width*height*numberOfChannels );
+            exit( PTERM_MEMORY_ERROR );
+        }
+
+        UInt frameSize = imageWidth*imageHeight*numberOfChannels;
+        for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=frameSize, resizedFrame+=resizedFrameSize )
+        {
+            Int resizeOutput = resizeImage( frame,
+                                            resizedFrame,
+                                            imageWidth,
+                                            imageHeight,
+                                            numberOfChannels,
+                                            width,
+                                            height );
+
+            if ( resizeOutput )
+                exit( resizeOutput );
+        }
+
+        free( data );
+    }
+    else // no resizing needed
+    {
+        resizedImage = data;
+        resizedFrame = resizedImage;
     }
 
     UInt outputSize = 0;
@@ -182,24 +214,15 @@ int main( int argc, char const* argv[] )
     }
 
     // Loop through frames
-    clock_t time = clock();
+    setvbuf( stdout, NULL, _IONBF, 0 );
+    clock_t time     = clock();
+    resizedFrame     = resizedImage;
+    UInt* frameDelay = delays;
 
-    for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=imageWidth*imageHeight*numberOfChannels )
+    puts( "Got to animation\n" );
+    for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay )
     {
-
-        // Resize the image
-        Int resizeOutput = resizeImage( frame,
-                                        resizedImage,
-                                        imageWidth,
-                                        imageHeight,
-                                        numberOfChannels,
-                                        width,
-                                        height );
-
-        if ( resizeOutput )
-            exit( resizeOutput );
-
-        _textFromImageInMemory( resizedImage,
+        _textFromImageInMemory( resizedFrame,
                                 output,
                                 width,
                                 height,
@@ -207,22 +230,26 @@ int main( int argc, char const* argv[] )
                                 backgroundOnly );
 
         // Print
-        double sleepTime = difftime( clock(), time );
+        double sleepTime = (*frameDelay) - difftime( clock(), time )/1000.0;
         if ( 0 < sleepTime )
-            usleep( sleepTime );
+            usleep( 1000 * sleepTime );
         time = clock();
 
         fwrite( output, sizeof(UChar), outputSize, stdout );
         fflush( stdout );
-        //printf( "%s%s\n", output, ansiColorReset );
     }
 
+    // Clear color
     fwrite( ansiColorReset, sizeof(UChar), ansiColorResetSize, stdout );
 
-    free(data);
-    free(resizedImage);
-    free(delays);
-    free(output);
+    // Release resources
+    free( delays );
+    free( output );
+
+    if ( width!=imageWidth || height!=imageHeight )
+        free( resizedImage );
+    else
+        free( data );
 
     return PTERM_SUCCESS;
 }
