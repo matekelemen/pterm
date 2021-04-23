@@ -480,7 +480,7 @@ void allocateANSITextImage( UChar** textImage,
     *size =
         width * height                      // <-- number of 'pixels'
         * (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
-        + width * (ansiColorResetSize + 1)  // <-- new line and color reset at line ends
+        + height * (ansiColorResetSize + 1) // <-- new line and color reset at line ends
         + 1;                                // <-- \0
     *textImage = (UChar*) malloc( *size );
 
