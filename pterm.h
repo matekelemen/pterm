@@ -242,33 +242,33 @@ const UChar ansiColorReset[] = "\e[0m";
 /// Note: ansi must be allocated and at least [ansiColorSize] long
 void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly )
 {
-    ansi[0] = '\e';
-    ansi[1] = '[';
+    *ansi++ = '\e';
+    *ansi++ = '[';
 
     if ( backgroundOnly )
-        ansi[2] = '4';  // <-- colored background
+        *ansi++ = '4';  // <-- colored background
     else
-        ansi[2] = '3';  // <-- colored character
+        *ansi++ = '3';  // <-- colored character
 
-    ansi[3] = '8';
-    ansi[4] = ';';
-    ansi[5] = '2';
-    ansi[6] = ';';
+    *ansi++ = '8';
+    *ansi++ = ';';
+    *ansi++ = '2';
+    *ansi++ = ';';
 
-    ansi[7] = (red / 100)+'0';
-    ansi[8] = ((red%100) / 10)+'0';
-    ansi[9] = (red%10)+'0';
-    ansi[10] = ';';
+    *ansi++ = (red / 100)+'0';
+    *ansi++ = ((red%100) / 10)+'0';
+    *ansi++ = (red%10)+'0';
+    *ansi++ = ';';
 
-    ansi[11] = (green / 100)+'0';
-    ansi[12] = ((green%100) / 10)+'0';
-    ansi[13] = (blue%10)+'0';
-    ansi[14] = ';';
+    *ansi++ = (green / 100)+'0';
+    *ansi++ = ((green%100) / 10)+'0';
+    *ansi++ = (blue%10)+'0';
+    *ansi++ = ';';
 
-    ansi[15] = (blue / 100)+'0';
-    ansi[16] = ((blue%100) / 10)+'0';
-    ansi[17] = (blue%10)+'0';
-    ansi[18] = 'm';
+    *ansi++ = (blue / 100)+'0';
+    *ansi++ = ((blue%100) / 10)+'0';
+    *ansi++ = (blue%10)+'0';
+    *ansi = 'm';
 }
 
 
@@ -286,25 +286,25 @@ void ansiReset( UChar* ansi )
  */ 
 void ansiPadding( UChar* ansi )
 {
-    ansi[0] = '\e';
-    ansi[1] = '[';
-    ansi[2] = '1';
-    ansi[3] = '1';
-    ansi[4] =  ';';
-    ansi[5] =  '3';
-    ansi[6] =  '1';
-    ansi[7] =  ';';
-    ansi[8] =  '4';
-    ansi[9] =  '9';
-    ansi[10] = 'm';
-    ansi[11] = ' ';
-    ansi[12] = '\b';
-    ansi[13] = ' ';
-    ansi[14] = '\b';
-    ansi[15] = ' ';
-    ansi[16] = '\b';
-    ansi[17] = ' ';
-    ansi[18] = '\b';
+    *ansi++ = '\e';
+    *ansi++ = '[';
+    *ansi++ = '1';
+    *ansi++ = '1';
+    *ansi++ =  ';';
+    *ansi++ =  '3';
+    *ansi++ =  '1';
+    *ansi++ =  ';';
+    *ansi++ =  '4';
+    *ansi++ =  '9';
+    *ansi++ = 'm';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi = '\b';
 }
 
 
