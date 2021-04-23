@@ -150,6 +150,100 @@ void _textFromImageInMemory( const UChar* image,
 
 
 // ------------------------------------------------------------------------------------
+// INLINE IMPLEMENTATION
+// ------------------------------------------------------------------------------------
+
+
+/// --- ANSI STUFF --- ///
+
+// Example: \e[38;2;255;255;255m
+const Int ansiColorSize = 19;
+
+// \e[0m
+const Int ansiColorResetSize = 4;
+const UChar ansiColorReset[] = "\e[0m";
+
+
+/// Note: ansi must be allocated and at least [ansiColorSize] long
+inline void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly )
+{
+    *ansi++ = '\e';
+    *ansi++ = '[';
+
+    if ( backgroundOnly )
+        *ansi++ = '4';  // <-- colored background
+    else
+        *ansi++ = '3';  // <-- colored character
+
+    *ansi++ = '8';
+    *ansi++ = ';';
+    *ansi++ = '2';
+    *ansi++ = ';';
+
+    *ansi++ = (red / 100)+'0';
+    *ansi++ = ((red%100) / 10)+'0';
+    *ansi++ = (red%10)+'0';
+    *ansi++ = ';';
+
+    *ansi++ = (green / 100)+'0';
+    *ansi++ = ((green%100) / 10)+'0';
+    *ansi++ = (blue%10)+'0';
+    *ansi++ = ';';
+
+    *ansi++ = (blue / 100)+'0';
+    *ansi++ = ((blue%100) / 10)+'0';
+    *ansi++ = (blue%10)+'0';
+    *ansi = 'm';
+}
+
+
+/// Note: ansi must be allocated and at least [ansiColorResetSize] long
+inline void ansiReset( UChar* ansi )
+{
+    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
+        *ansi = *c;
+}
+
+
+/**
+ * Fill up the array with characters that won't be displayed.
+ * @note ansi must be allocated and at least [ansiColorSize] long.
+ */ 
+inline void ansiPadding( UChar* ansi )
+{
+    *ansi++ = '\e';
+    *ansi++ = '[';
+    *ansi++ = '1';
+    *ansi++ = '1';
+    *ansi++ =  ';';
+    *ansi++ =  '3';
+    *ansi++ =  '1';
+    *ansi++ =  ';';
+    *ansi++ =  '4';
+    *ansi++ =  '9';
+    *ansi++ = 'm';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi = '\b';
+}
+
+
+inline void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
+{
+    const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
+    const UChar* pixelEnd   = pixelBegin + numberOfChannels;
+
+    for ( const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
+        *pixel = *it_component;
+}
+
+
+// ------------------------------------------------------------------------------------
 // IMPLEMENTATION
 // ------------------------------------------------------------------------------------
 
@@ -229,95 +323,7 @@ const Char* fileExtension( const Char* fileName )
 }
 
 
-/// --- ANSI STUFF --- ///
-
-// Example: \e[38;2;255;255;255m
-const Int ansiColorSize = 19;
-
-// \e[0m
-const Int ansiColorResetSize = 4;
-const UChar ansiColorReset[] = "\e[0m";
-
-
-/// Note: ansi must be allocated and at least [ansiColorSize] long
-void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly )
-{
-    *ansi++ = '\e';
-    *ansi++ = '[';
-
-    if ( backgroundOnly )
-        *ansi++ = '4';  // <-- colored background
-    else
-        *ansi++ = '3';  // <-- colored character
-
-    *ansi++ = '8';
-    *ansi++ = ';';
-    *ansi++ = '2';
-    *ansi++ = ';';
-
-    *ansi++ = (red / 100)+'0';
-    *ansi++ = ((red%100) / 10)+'0';
-    *ansi++ = (red%10)+'0';
-    *ansi++ = ';';
-
-    *ansi++ = (green / 100)+'0';
-    *ansi++ = ((green%100) / 10)+'0';
-    *ansi++ = (blue%10)+'0';
-    *ansi++ = ';';
-
-    *ansi++ = (blue / 100)+'0';
-    *ansi++ = ((blue%100) / 10)+'0';
-    *ansi++ = (blue%10)+'0';
-    *ansi = 'm';
-}
-
-
-/// Note: ansi must be allocated and at least [ansiColorResetSize] long
-void ansiReset( UChar* ansi )
-{
-    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
-        *ansi = *c;
-}
-
-
-/**
- * Fill up the array with characters that won't be displayed.
- * @note ansi must be allocated and at least [ansiColorSize] long.
- */ 
-void ansiPadding( UChar* ansi )
-{
-    *ansi++ = '\e';
-    *ansi++ = '[';
-    *ansi++ = '1';
-    *ansi++ = '1';
-    *ansi++ =  ';';
-    *ansi++ =  '3';
-    *ansi++ =  '1';
-    *ansi++ =  ';';
-    *ansi++ =  '4';
-    *ansi++ =  '9';
-    *ansi++ = 'm';
-    *ansi++ = ' ';
-    *ansi++ = '\b';
-    *ansi++ = ' ';
-    *ansi++ = '\b';
-    *ansi++ = ' ';
-    *ansi++ = '\b';
-    *ansi++ = ' ';
-    *ansi = '\b';
-}
-
-
 /// --- IMAGE UTILITIES --- ///
-
-void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
-{
-    const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
-    const UChar* pixelEnd   = pixelBegin + numberOfChannels;
-
-    for ( const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
-        *pixel = *it_component;
-}
 
 // Linear map: grayscale value -> ASCII character
 const UInt asciiIntensityTableSize = 15;
