@@ -219,7 +219,6 @@ int main( int argc, char const* argv[] )
     resizedFrame     = resizedImage;
     UInt* frameDelay = delays;
 
-    puts( "Got to animation\n" );
     for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay )
     {
         _textFromImageInMemory( resizedFrame,
