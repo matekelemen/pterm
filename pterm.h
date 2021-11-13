@@ -36,18 +36,18 @@ typedef UInt            Bool;
  * Load a file into memory and decode it with stb_image. The returned unsigned char
  * array contains all frames of the input file with 8 bits per channel in the
  * following layout: [frame,row,column,channel]
- * 
+ *
  * The original frames may have 1..4 channels, but are ultimately converted to RGBA, so the
  * output always has 4 channels.
- * 
+ *
  * Memory is allocated for reading the file, and for converting it to image frames
  * (the former is deallocated internally). An additional chunk of memory is allocated
  * for frame delays as well, even if the image file consists of a single frame
  * (meaning that the frame delays will always have to be deallocated too).
- * 
+ *
  * Supported image formats: JPEG, PNG, TGA, BMP, PSD, GIF, HDR, PIC, PNM
  * (see details at https://github.com/nothings/stb/blob/master/stb_image.h)
- * 
+ *
  * @param fileName path to an image file
  * @param numberOfFrames number of frames in the source image (only animated GIFs have more than 1)
  * @param frameDelaysMS delays between consecutive frames in milliseconds (always stores at least 1 value)
@@ -69,7 +69,7 @@ UChar* loadImageFile( const Char* fileName,
  * Convert an 8-bit-per-channel image into ANSI-colored text. The function allocates memory
  * for the output internally. An additional internal allocation happens if the user requests
  * a resized image, which is then deallocated before returning.
- * 
+ *
  * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
  * @param width image width (number of columns)
  * @param height image height (number of rows)
@@ -105,9 +105,9 @@ void allocateANSITextImage( UChar** textImage,
  * This function is called from @ref{textFromImageInMemory}, and can be used to make the
  * conversion of animated GIFs more efficient.
  * If you want to call this function yourself, allocate with @ref{allocateANSITextImage} first.
- * 
+ *
  * @note the image is expected to have 4 channels for RGBA
- * 
+ *
  * @param image image with 8 bits per channel and [row,column,channel] layout (origin in the top left corner)
  * @param destination output array (must have proper size)
  * @param width input image width
@@ -208,7 +208,7 @@ inline void ansiReset( UChar* ansi )
 /**
  * Fill up the array with characters that won't be displayed.
  * @note ansi must be allocated and at least [ansiColorSize] long.
- */ 
+ */
 inline void ansiPadding( UChar* ansi )
 {
     *ansi++ = '\e';
@@ -256,7 +256,7 @@ void copyString( const Char* source, Char** destination )
 {
     UInt sourceSize = 0;
     while( PTERM_TRUE ) { if ( source[sourceSize++] == '\0' ) break; }
-    
+
     *destination = (Char*) malloc( sourceSize );
     strcpy( *destination, source );
 }
@@ -346,7 +346,7 @@ void fitImageSize( Int* width, Int* height, Int targetWidth, Int targetHeight )
 {
     if ( targetWidth < *width )
     {
-        *height = (targetWidth*(*height)) / (*width) / 2;
+        *height = (targetWidth*(*height)) / (*width);
         *width = targetWidth;
     }
     if ( targetHeight < *height )
@@ -440,7 +440,7 @@ UChar* loadImageFile( const Char* fileName,
         );
         free(data);
         data = tmp;
-        
+
         *numberOfFrames = 1;
         *frameDelaysMS = (Int*) malloc( sizeof(Int) );
 
@@ -545,7 +545,7 @@ UChar* textFromImageInMemory( const UChar* image,
                             targetHeight,
                             numberOfChannels,
                             backgroundOnly );
-    
+
     // Deallocate if the image was resized
     if ( width != targetWidth || height != targetHeight )
         free( (UChar*)frame );

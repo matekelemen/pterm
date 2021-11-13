@@ -22,23 +22,23 @@
 
 
 /// Get parent terminal size on linux
-void getTerminalSize( Int* rows, Int* columns )
+void getTerminalSize(Int* rows, Int* columns)
 {
     #if _WIN32
         CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
-        HANDLE terminal = GetStdHandle( STD_OUTPUT_HANDLE );
-        GetConsoleScreenBufferInfo( terminal, &bufferInfo );
+        HANDLE terminal = GetStdHandle(STD_OUTPUT_HANDLE);
+        GetConsoleScreenBufferInfo(terminal, &bufferInfo);
         *rows = bufferInfo.srWindow.Bottom - bufferInfo.srWindow.Top;
         *columns = bufferInfo.srWindow.Right - bufferInfo.srWindow.Left + 1;
-        
+
         DWORD drawMode = 0;
-        GetConsoleMode( terminal, &drawMode );
+        GetConsoleMode(terminal, &drawMode);
         drawMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        SetConsoleMode( terminal, drawMode );
-        //SetConsoleMode( ENABLE_VIRTUAL_TERMINAL_PROCESSING, 1 );
+        SetConsoleMode(terminal, drawMode);
+        //SetConsoleMode(ENABLE_VIRTUAL_TERMINAL_PROCESSING, 1);
     #else
         struct winsize w;
-        ioctl( STDOUT_FILENO, TIOCGWINSZ, &w );
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
         *rows = w.ws_row - 1;   // -1 for newline at the end
         *columns = w.ws_col;
     #endif
@@ -48,71 +48,192 @@ void getTerminalSize( Int* rows, Int* columns )
 void printHelp()
 {
     /// TODO
-    puts( "--help" );
-    puts( "filename: path to image file" );
-    puts( "[-h] print help" );
-    puts( "[-b] color background instead of ASCII characters" );
+    puts("--help");
+    puts("filename: path to image file");
+    puts("[-w <width>] output width");
+    puts("[-h <height>] output height");
+    puts("[-b] color background instead of ASCII characters");
 }
 
 
-Bool parseArguments( int argc, const char* argv[], Char** fileName, Bool* backgroundOnly, Bool* isGIF )
+struct parameters
 {
-    // Check number of arguments
-    if ( argc < 2 )
-    {
-        printf( "%s\n", "Expecting at least a path to an image file but got no arguments" );
-        return PTERM_ARGUMENT_ERROR;
-    }
+    char* fileName;
+    Bool  backgroundOnly;
+    Bool  isGIF;
+    Int   width;
+    Int   height;
+};
 
-    for ( Int i=1; i<argc; ++i )
+typedef struct parameters Parameters;
+
+
+void initializeParameters(Parameters* p_parameters)
+{
+    p_parameters->fileName       = NULL;
+    p_parameters->backgroundOnly = PTERM_FALSE;
+    p_parameters->isGIF          = PTERM_FALSE;
+    p_parameters->width          = 0;
+    p_parameters->height         = 0;
+}
+
+
+Int parseInteger(const char* p_string)
+{
+    Char* p_end = NULL;
+    Int output = (Int)strtol(p_string, &p_end, 10);
+    return output;
+}
+
+
+Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
+{
+    // Argument-parameter maps
+    const int NULL_FLAG = 0;
+
+    int intFlag = NULL_FLAG;
+    Int* intArguments[] = {
+        NULL,
+        &p_parameters->width,
+        &p_parameters->height
+    };
+
+    int stringFlag = NULL_FLAG;
+    Char** stringArguments[] = {
+        NULL,
+        &p_parameters->fileName
+    };
+
+    // Parse arguments
+    for (Int i=1; i<argc; ++i)
     {
         Char token = argv[i][0];
 
-        if ( token == '\0' ) // empty argument
+        if (token == '\0') // empty argument
             continue;
 
-        if ( token != '-' ) // not a flag, not an argument-value pair -> must be a file name
+        if (token != '-') // value argument
         {
-            copyString( argv[i], fileName );
-            continue;
-        }
-
-        else // flag or argument-value pair
-        {
-            token = argv[i][1];
-
-            if ( token == 'b' ) // flag: backgroundOnly
+            if (intFlag)
             {
-                *backgroundOnly = PTERM_TRUE;
+                *intArguments[intFlag] = parseInteger(argv[i]);
+                intFlag = NULL_FLAG;
                 continue;
             }
-            if ( token == 'h' )
+            else if (stringFlag)
+            {
+                copyString(argv[i], stringArguments[stringFlag]);
+                stringFlag = NULL_FLAG;
+                continue;
+            }
+            else // no flag set before value => must be file name
+            {
+                copyString(argv[i], &p_parameters->fileName);
+                continue;
+            }
+        }
+
+        else // flag argument
+        {
+            // Check whether we're expecting a value
+            if (intFlag || stringFlag)
+            {
+                printf("Argument error: expecting a value but got a flag: %s", argv[i]);
                 return PTERM_FALSE;
-            if ( token == '-' ) // argument-value pair
-            {}
+            }
+
+            token = argv[i][1];
+            if (token == 'b') // flag: backgroundOnly
+            {
+                p_parameters->backgroundOnly = PTERM_TRUE;
+                continue;
+            }
+            if (token == 'w') // width => expecting an integer value
+            {
+                intFlag = 1;
+                continue;
+            }
+            if (token == 'h') // height => expecting an integer value
+            {
+                intFlag = 2;
+                continue;
+            }
         }
 
         // Unhandled
-        printf( "Unrecognized argument: %s\n", argv[i] );
+        printf("Unrecognized argument: %s\n", argv[i]);
         return PTERM_FALSE;
     } // for argc
 
-    if ( strcmp(fileExtension(*fileName), ".gif") == 0 )
-        *isGIF = PTERM_TRUE;
+    // Postprocess
+    if (!p_parameters->fileName) // Default to empty file name => ""
+    {
+        p_parameters->fileName = (Char*) malloc(1 * sizeof(Char));
+        *p_parameters->fileName = '\0';
+    }
+
+    if (strcmp(fileExtension(p_parameters->fileName), ".gif") == 0)
+        p_parameters->isGIF = PTERM_TRUE;
+
+    if (p_parameters->width && p_parameters->height)
+    {
+        printf("Width and height cannot be specified at the same time");
+        return PTERM_FALSE;
+    }
 
     return PTERM_TRUE;
 }
 
 
+void getFinalImageSize(Parameters* p_parameters, Int originalWidth, Int originalHeight)
+{
+    Int targetWidth = originalWidth, targetHeight = originalHeight;
 
-int main( int argc, char const* argv[] )
+    if (p_parameters->width || p_parameters->height)
+    {
+        if (p_parameters->width && !p_parameters->height)
+        {
+            targetWidth = p_parameters->width;
+            targetHeight = p_parameters->width / (double)originalWidth * originalHeight;
+        }
+        else if (!p_parameters->width && p_parameters->height)
+        {
+            targetWidth = p_parameters->height / (double)originalHeight * originalWidth;
+            targetHeight = p_parameters->height;
+        }
+        else
+        {
+            targetWidth = p_parameters->width;
+            targetHeight = p_parameters->height;
+        }
+    }
+    else // no requested size => fit to terminal size
+    {
+        getTerminalSize(&targetWidth, &targetHeight);
+
+        if (!targetWidth || !targetHeight)
+        {
+            printf("Invalid terminal size: %ix%i\n", targetHeight, targetWidth);
+            exit(PTERM_ENVIRONMENT_ERROR);
+        }
+
+        PTERM_DEBUG_PRINTF("Detected %ix%i terminal\n", targetHeight, targetWidth);
+    }
+
+    p_parameters->width = originalWidth;
+    p_parameters->height = originalHeight;
+    fitImageSize(&p_parameters->width, &p_parameters->height, targetWidth, targetHeight);
+}
+
+
+
+int main(int argc, char const* argv[])
 {
     // Init
-    Char* fileName = NULL;
-    Bool backgroundOnly = PTERM_FALSE;
-    Bool isGIF = PTERM_FALSE;
+    Parameters parameters;
+    initializeParameters(&parameters);
 
-    if ( !parseArguments( argc, argv, &fileName, &backgroundOnly, &isGIF ) )
+    if (!parseArguments(argc, argv, &parameters))
     {
         printHelp();
         return PTERM_ARGUMENT_ERROR;
@@ -122,80 +243,64 @@ int main( int argc, char const* argv[] )
     UInt imageWidth=0, imageHeight=0, numberOfChannels=0, numberOfSourceChannels=0, numberOfFrames=0;
     Int* delays = NULL;
 
-    UChar* data = loadImageFile( fileName,
-                                 &numberOfFrames,
-                                 &delays,
-                                 &imageWidth,
-                                 &imageHeight,
-                                 &numberOfSourceChannels,
-                                 &numberOfChannels );
+    UChar* data = loadImageFile(
+        parameters.fileName,
+        &numberOfFrames,
+        &delays,
+        &imageWidth,
+        &imageHeight,
+        &numberOfSourceChannels,
+        &numberOfChannels
+    );
 
-    free(fileName);
-    fileName = NULL;
+    free(parameters.fileName);
+    parameters.fileName = NULL;
 
-    if ( numberOfChannels != 4 )
+    if (numberOfChannels != 4)
     {
-        PTERM_DEBUG_PRINTF( "Invalid number of channels (%i)\n", numberOfChannels );
-        exit( PTERM_FAIL );
+        PTERM_DEBUG_PRINTF("Invalid number of channels (%i)\n", numberOfChannels);
+        exit(PTERM_FAIL);
     }
 
-    // Load environment
-    Int terminalRows=0, terminalColumns=0;
-    getTerminalSize( &terminalRows, &terminalColumns );
+    // Get target image sizes
+    getFinalImageSize(&parameters, imageWidth, imageHeight);
+    parameters.height /= 2; // adjust for terminal cell skewness
 
-    if ( !terminalRows || !terminalColumns )
-    {
-        printf( "Invalid terminal size: %ix%i\n", terminalColumns, terminalRows );
-        return PTERM_ENVIRONMENT_ERROR;
-    }
-
-    PTERM_DEBUG_PRINTF( "Detected %ix%i terminal\n", terminalColumns, terminalRows );
-
-    // Allocate and initialize
     UChar* frame = data;
-    UChar pixel[4];
-
-    if ( !pixel )
-    {
-        printf( "Failed to allocate pixel of size %i\n", numberOfChannels );
-        return PTERM_MEMORY_ERROR;
-    }
-
-    Int width=imageWidth, height=imageHeight;
-    fitImageSize( &width, &height, terminalColumns, terminalRows );
-
     UChar* resizedImage;
     UChar* resizedFrame;
-    UInt resizedFrameSize = width*height*numberOfChannels;
+    UInt resizedFrameSize = parameters.width * parameters.height * numberOfChannels;
 
     // Resize frames if necessary
-    if ( width!=imageWidth || height!=imageHeight )
+    if (parameters.width!=imageWidth || parameters.height!=imageHeight)
     {
-        resizedImage = (UChar*) malloc( width * height * numberOfChannels * numberOfFrames );
+        resizedImage = (UChar*) malloc(resizedFrameSize * numberOfFrames);
         resizedFrame = resizedImage;
 
-        if ( !resizedImage )
+        if (!resizedImage)
         {
-            printf( "Failed to allocate memory for resized image (%ib)", width*height*numberOfChannels );
-            exit( PTERM_MEMORY_ERROR );
+            printf("Failed to allocate memory for resized image (%ib)", resizedFrameSize * numberOfFrames);
+            exit(PTERM_MEMORY_ERROR);
         }
 
         UInt frameSize = imageWidth*imageHeight*numberOfChannels;
-        for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=frameSize, resizedFrame+=resizedFrameSize )
+        for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=frameSize, resizedFrame+=resizedFrameSize)
         {
-            Int resizeOutput = resizeImage( frame,
-                                            resizedFrame,
-                                            imageWidth,
-                                            imageHeight,
-                                            numberOfChannels,
-                                            width,
-                                            height );
+            Int resizeOutput = resizeImage(
+                frame,
+                resizedFrame,
+                imageWidth,
+                imageHeight,
+                numberOfChannels,
+                parameters.width,
+                parameters.height
+            );
 
-            if ( resizeOutput )
-                exit( resizeOutput );
+            if (resizeOutput)
+                exit(resizeOutput);
         }
 
-        free( data );
+        free(data);
     }
     else // no resizing needed
     {
@@ -205,50 +310,52 @@ int main( int argc, char const* argv[] )
 
     UInt outputSize = 0;
     UChar* output = NULL;
-    allocateANSITextImage( &output, &outputSize, width, height );
+    allocateANSITextImage(&output, &outputSize, parameters.width, parameters.height);
 
-    if ( !output )
+    if (!output)
     {
-        printf( "Failed to allocate output of size %i\n", outputSize );
-        exit( PTERM_MEMORY_ERROR );
+        printf("Failed to allocate output of size %i\n", outputSize);
+        exit(PTERM_MEMORY_ERROR);
     }
 
     // Loop through frames
-    setvbuf( stdout, NULL, _IONBF, 0 );
+    setvbuf(stdout, NULL, _IONBF, 0);
     clock_t time     = clock();
     resizedFrame     = resizedImage;
-    UInt* frameDelay = delays;
+    UInt* frameDelay = (UInt*)delays;
 
-    for ( UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay )
+    for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay)
     {
-        _textFromImageInMemory( resizedFrame,
-                                output,
-                                width,
-                                height,
-                                numberOfChannels,
-                                backgroundOnly );
+        _textFromImageInMemory(
+            resizedFrame,
+            output,
+            parameters.width,
+            parameters.height,
+            numberOfChannels,
+            parameters.backgroundOnly
+        );
 
         // Print
-        double sleepTime = (*frameDelay) - difftime( clock(), time )/1000.0;
-        if ( 0 < sleepTime )
-            usleep( 1000 * sleepTime );
+        double sleepTime = (*frameDelay) - difftime(clock(), time)/1000.0;
+        if (0 < sleepTime)
+            usleep(1000 * sleepTime);
         time = clock();
 
-        fwrite( output, sizeof(UChar), outputSize, stdout );
-        fflush( stdout );
+        fwrite(output, sizeof(UChar), outputSize, stdout);
+        fflush(stdout);
     }
 
     // Clear color
-    fwrite( ansiColorReset, sizeof(UChar), ansiColorResetSize, stdout );
+    fwrite(ansiColorReset, sizeof(UChar), ansiColorResetSize, stdout);
 
     // Release resources
-    free( delays );
-    free( output );
+    free(delays);
+    free(output);
 
-    if ( width!=imageWidth || height!=imageHeight )
-        free( resizedImage );
+    if (parameters.width!=imageWidth || parameters.height!=imageHeight)
+        free(resizedImage);
     else
-        free( data );
+        free(data);
 
     return PTERM_SUCCESS;
 }
