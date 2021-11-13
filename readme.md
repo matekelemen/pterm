@@ -21,12 +21,18 @@ Alpha channel support
 ## Usage
 
 ```
-pterm FILE [-b]
+pterm FILE [-b] [-w output_width] [-h output_height] [-t file_type]
 ```
 
 - ```FILE```: path to an RGB-convertible image file
 
 - ```-b```: color 'background' instead of ASCII characters
+
+- ```-w```: specify output width (mutually exclusive with ```-h```)
+
+- ```-h```: specify output height (mutually exclusive with ```-w```)
+
+- ```-t```: image format; relevant if the input image is piped via ```stdin```
 
 Supported image formats:
 JPEG, PNG, TGA, BMP, PSD, GIF, HDR, PIC, PNM (see details in [stb_image.h](https://github.com/nothings/stb/blob/master/stb_image.h))

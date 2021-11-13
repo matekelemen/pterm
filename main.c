@@ -52,6 +52,7 @@ void printHelp()
     puts("filename: path to image file");
     puts("[-w <width>] output width");
     puts("[-h <height>] output height");
+    puts("[-t <file type>] file type if reading from stdin");
     puts("[-b] color background instead of ASCII characters");
 }
 
@@ -59,6 +60,7 @@ void printHelp()
 struct parameters
 {
     char* fileName;
+    char* extension;
     Bool  backgroundOnly;
     Bool  isGIF;
     Int   width;
@@ -71,6 +73,7 @@ typedef struct parameters Parameters;
 void initializeParameters(Parameters* p_parameters)
 {
     p_parameters->fileName       = NULL;
+    p_parameters->extension      = NULL;
     p_parameters->backgroundOnly = PTERM_FALSE;
     p_parameters->isGIF          = PTERM_FALSE;
     p_parameters->width          = 0;
@@ -83,6 +86,55 @@ Int parseInteger(const char* p_string)
     Char* p_end = NULL;
     Int output = (Int)strtol(p_string, &p_end, 10);
     return output;
+}
+
+
+void readPipe(UChar** content, UInt* size)
+{
+    const UInt chunkSize = 1024;
+    UInt bufferSize = 1;
+
+    // Initial allocation
+    *size = 0;
+    *content = (UChar*) malloc(bufferSize * sizeof(UChar));
+    if (!*content)
+    {
+        puts("Failed to allocate initial memory for reading stdin");
+        exit(PTERM_MEMORY_ERROR);
+    }
+
+    UChar* begin = *content;
+
+    // Read loop
+    while(PTERM_TRUE)
+    {
+        // Extend memory if necessary
+        if (bufferSize <= (unsigned long)(begin - *content))
+        {
+            UChar* tmp = *content;
+            bufferSize += chunkSize;
+            *content = (UChar*) realloc(*content, bufferSize * sizeof(UChar));
+            if (!*content)
+            {
+                printf("Failed to extend memory while reading stdin (%ub)", *size);
+                free(tmp);
+                exit(PTERM_MEMORY_ERROR);
+            }
+            begin = (*content) + (begin - tmp);
+        }
+
+        // Read stdin
+        UChar c = (UChar) getchar();
+        if (!feof(stdin))
+        {
+            *begin = c;
+            ++begin;
+        }
+        else
+            break;
+    }
+
+    *size = begin - *content;
 }
 
 
@@ -101,7 +153,8 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
     int stringFlag = NULL_FLAG;
     Char** stringArguments[] = {
         NULL,
-        &p_parameters->fileName
+        &p_parameters->fileName,
+        &p_parameters->extension
     };
 
     // Parse arguments
@@ -158,6 +211,11 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
                 intFlag = 2;
                 continue;
             }
+            if(token == 't') // file type => expecting a string value
+            {
+                stringFlag = 2;
+                continue;
+            }
         }
 
         // Unhandled
@@ -166,19 +224,30 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
     } // for argc
 
     // Postprocess
-    if (!p_parameters->fileName) // Default to empty file name => ""
+    if (p_parameters->fileName && p_parameters->extension)
     {
-        p_parameters->fileName = (Char*) malloc(1 * sizeof(Char));
-        *p_parameters->fileName = '\0';
+        puts("Cannot specify both file name and extension");
+        return PTERM_FALSE;
     }
 
-    if (strcmp(fileExtension(p_parameters->fileName), ".gif") == 0)
+    if (p_parameters->fileName && strcmp(fileExtension(p_parameters->fileName), ".gif") == 0)
         p_parameters->isGIF = PTERM_TRUE;
 
     if (p_parameters->width && p_parameters->height)
     {
         printf("Width and height cannot be specified at the same time");
         return PTERM_FALSE;
+    }
+
+    if (!p_parameters->extension)
+    {
+        if (p_parameters->fileName)
+            p_parameters->extension = strdup(fileExtension(p_parameters->fileName));
+        else
+        {
+            p_parameters->extension = (Char*) malloc(sizeof(Char));
+            p_parameters->extension[0] = '\0';
+        }
     }
 
     return PTERM_TRUE;
@@ -243,18 +312,56 @@ int main(int argc, char const* argv[])
     UInt imageWidth=0, imageHeight=0, numberOfChannels=0, numberOfSourceChannels=0, numberOfFrames=0;
     Int* delays = NULL;
 
-    UChar* data = loadImageFile(
-        parameters.fileName,
-        &numberOfFrames,
-        &delays,
-        &imageWidth,
-        &imageHeight,
-        &numberOfSourceChannels,
-        &numberOfChannels
-    );
+    UChar* data = NULL;
+    if (parameters.fileName)
+        data = loadImageFile(
+            parameters.fileName,
+            &numberOfFrames,
+            &delays,
+            &imageWidth,
+            &imageHeight,
+            &numberOfSourceChannels,
+            &numberOfChannels
+        );
+    else if (parameters.extension)
+    {
+        UInt size = 0;
+        readPipe(&data, &size);
+        Int conversionOutput = convertImage(
+            &data,
+            size,
+            parameters.extension,
+            &numberOfFrames,
+            &delays,
+            &imageWidth,
+            &imageHeight,
+            &numberOfSourceChannels,
+            &numberOfChannels
+        );
 
-    free(parameters.fileName);
-    parameters.fileName = NULL;
+        if (conversionOutput != PTERM_SUCCESS)
+        {
+            printf("Failed to convert image from stdin (%i)\n", conversionOutput);
+            exit(conversionOutput);
+        }
+    }
+    else
+    {
+        puts("No input");
+        exit(PTERM_INPUT_ERROR);
+    }
+
+    if (parameters.fileName)
+    {
+        free(parameters.fileName);
+        parameters.fileName = NULL;
+    }
+
+    if (parameters.extension)
+    {
+        free(parameters.extension);
+        parameters.extension = NULL;
+    }
 
     if (numberOfChannels != 4)
     {

@@ -56,13 +56,13 @@ typedef UInt            Bool;
  * @param numberOfOriginalChannels number of channels in the source image
  * @param numberOfOutputChannels number of channels in the loaded image (always set to 4 for RGBA)
  */
-UChar* loadImageFile( const Char* fileName,
+UChar* loadImageFile(const Char* fileName,
                       UInt* numberOfFrames,
                       Int** frameDelaysMS,
                       UInt* width,
                       UInt* height,
                       UInt* numberOfOriginalChannels,
-                      UInt* numberOfOutputChannels );
+                      UInt* numberOfOutputChannels);
 
 /// Convert image to text
 /**
@@ -78,13 +78,13 @@ UChar* loadImageFile( const Char* fileName,
  * @param targetHeight height of the desired output 'image'
  * @param backgroundOnly fill text with colored background instead of ASCII characters
  */
-UChar* textFromImageInMemory( const UChar* image,
+UChar* textFromImageInMemory(const UChar* image,
                               UInt width,
                               UInt height,
                               UInt numberOfChannels,
                               UInt targetWidth,
                               UInt targetHeight,
-                              Bool backgroundOnly );
+                              Bool backgroundOnly);
 
 /// Allocate memory for an ANSI colored text 'image'
 /**
@@ -93,10 +93,10 @@ UChar* textFromImageInMemory( const UChar* image,
  * @param width text image width
  * @param height text image height
  */
-void allocateANSITextImage( UChar** textImage,
+void allocateANSITextImage(UChar** textImage,
                             UInt* size,
                             UInt width,
-                            UInt height );
+                            UInt height);
 
 /// Convert image to text
 /**
@@ -115,12 +115,12 @@ void allocateANSITextImage( UChar** textImage,
  * @param numberOfChannels number of pixel components in the input image
  * @param backgoundOnly fill text with colored background instead of ASCII characters
  */
-void _textFromImageInMemory( const UChar* image,
+void _textFromImageInMemory(const UChar* image,
                              UChar* destination,
                              UInt width,
                              UInt height,
                              UInt numberOfChannels,
-                             Bool backgroundOnly );
+                             Bool backgroundOnly);
 
 
 // ------------------------------------------------------------------------------------
@@ -142,16 +142,26 @@ void _textFromImageInMemory( const UChar* image,
 
 // Macro switch for debug printing
 #ifdef PTERM_DEBUG
-    #define PTERM_DEBUG_PRINTF( ... )   \
-    printf( __VA_ARGS__ )
+    #define PTERM_DEBUG_PRINTF(...)   \
+    printf(__VA_ARGS__)
+    #define PTERM_INLINE
 #else
-    #define PTERM_DEBUG_PRINTF( ... )
+    #define PTERM_DEBUG_PRINTF(...)
+    #define PTERM_INLINE inline
 #endif
 
 
 // ------------------------------------------------------------------------------------
 // INLINE IMPLEMENTATION
 // ------------------------------------------------------------------------------------
+
+void ansiColorCode(UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly);
+
+void ansiReset(UChar* ansi);
+
+void ansiPadding(UChar* ansi);
+
+void getPixel(const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels);
 
 
 /// --- ANSI STUFF --- ///
@@ -165,12 +175,12 @@ const UChar ansiColorReset[] = "\e[0m";
 
 
 /// Note: ansi must be allocated and at least [ansiColorSize] long
-inline void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly )
+PTERM_INLINE void ansiColorCode(UChar red, UChar green, UChar blue, UChar* ansi, Bool backgroundOnly)
 {
     *ansi++ = '\e';
     *ansi++ = '[';
 
-    if ( backgroundOnly )
+    if (backgroundOnly)
         *ansi++ = '4';  // <-- colored background
     else
         *ansi++ = '3';  // <-- colored character
@@ -198,9 +208,9 @@ inline void ansiColorCode( UChar red, UChar green, UChar blue, UChar* ansi, Bool
 
 
 /// Note: ansi must be allocated and at least [ansiColorResetSize] long
-inline void ansiReset( UChar* ansi )
+PTERM_INLINE void ansiReset(UChar* ansi)
 {
-    for ( const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi  )
+    for (const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi )
         *ansi = *c;
 }
 
@@ -209,7 +219,7 @@ inline void ansiReset( UChar* ansi )
  * Fill up the array with characters that won't be displayed.
  * @note ansi must be allocated and at least [ansiColorSize] long.
  */
-inline void ansiPadding( UChar* ansi )
+PTERM_INLINE void ansiPadding(UChar* ansi)
 {
     *ansi++ = '\e';
     *ansi++ = '[';
@@ -233,12 +243,12 @@ inline void ansiPadding( UChar* ansi )
 }
 
 
-inline void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels )
+PTERM_INLINE void getPixel(const UChar* image, UChar* pixel, Int rowIndex, Int columnIndex, Int imageWidth, Int imageHeight, Int numberOfChannels)
 {
     const UChar* pixelBegin = image + (rowIndex * imageWidth + columnIndex) * numberOfChannels;
     const UChar* pixelEnd   = pixelBegin + numberOfChannels;
 
-    for ( const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel )
+    for (const UChar* it_component=pixelBegin; it_component != pixelEnd; ++it_component, ++pixel)
         *pixel = *it_component;
 }
 
@@ -252,71 +262,71 @@ inline void getPixel( const UChar* image, UChar* pixel, Int rowIndex, Int column
 
 /// --- Utility --- ///
 
-void copyString( const Char* source, Char** destination )
+void copyString(const Char* source, Char** destination)
 {
     UInt sourceSize = 0;
-    while( PTERM_TRUE ) { if ( source[sourceSize++] == '\0' ) break; }
+    while(PTERM_TRUE) { if (source[sourceSize++] == '\0') break; }
 
-    *destination = (Char*) malloc( sourceSize );
-    strcpy( *destination, source );
+    *destination = (Char*) malloc(sourceSize);
+    strcpy(*destination, source);
 }
 
 
-UChar* loadFile( const Char* fileName, UInt* size )
+UChar* loadFile(const Char* fileName, UInt* size)
 {
     UChar* data = NULL;
     *size = 0;
 
-    if ( fileName )
+    if (fileName)
     {
         errno = 0;
-        FILE* file = fopen( fileName, "rb" );
+        FILE* file = fopen(fileName, "rb");
 
-        if ( file )
+        if (file)
         {
             // Get file size
-            fseek( file, 0, SEEK_END );
+            fseek(file, 0, SEEK_END);
             Int fileSize = ftell(file);
-            fseek( file, 0, SEEK_SET );
+            fseek(file, 0, SEEK_SET);
 
-            if ( fileSize )
+            if (fileSize)
             {
                 // Allocate memory
-                data = (UChar*) malloc( fileSize * sizeof(UChar) );
-                *size = (UInt) fread( data, sizeof(UChar), fileSize, file );
+                data = (UChar*) malloc(fileSize * sizeof(UChar));
+                *size = (UInt) fread(data, sizeof(UChar), fileSize, file);
             }
             else
-                PTERM_DEBUG_PRINTF( "%s\n", "WARNING: empty file" );
+                PTERM_DEBUG_PRINTF("%s\n", "WARNING: empty file");
         } // if file
         else
         {
-            printf( "Failed to open %s (%s)\n", fileName, strerror(errno) );
-            exit( PTERM_INPUT_ERROR );
+            printf("Failed to open %s (%s)\n", fileName, strerror(errno));
+            exit(PTERM_INPUT_ERROR);
         } // if !file
     }
     else
     {
-        puts( "No file name provided!" );
-        exit( PTERM_INPUT_ERROR );
+        puts("No file name provided!");
+        exit(PTERM_INPUT_ERROR);
     }
 
     return data;
 }
 
 
-const Char* fileExtension( const Char* fileName )
+const Char* fileExtension(const Char* fileName)
 {
     const Char* extension = fileName;
     const Char* tmp = fileName;
 
-    while ( *tmp != '\0' )
+    while (*tmp != '\0')
     {
-        if ( *tmp == '.' )
+        if (*tmp == '.')
             extension = tmp;
         ++tmp;
     }
 
-    if ( extension == fileName ) // no extension
+    if (extension == fileName) // no extension
         extension = tmp;
 
     return extension;
@@ -329,27 +339,27 @@ const Char* fileExtension( const Char* fileName )
 const UInt asciiIntensityTableSize = 15;
 const UChar asciiIntensityTable[] = { ' ', '.', ',', ':', ';', 'i', 'l', 't', 'f', 'L', 'C', 'G', '0', '8', '@' };
 
-UChar getASCIIFromGrayScale( UChar value )
+UChar getASCIIFromGrayScale(UChar value)
 {
     UInt key = ((asciiIntensityTableSize-1) * value) / 256;
     return asciiIntensityTable[key];
 }
 
 
-UChar getASCIIFromRGB( UChar red, UChar green, UChar blue )
+UChar getASCIIFromRGB(UChar red, UChar green, UChar blue)
 {
-    return getASCIIFromGrayScale( 0.2989*red + 0.587*green + 0.114*blue );
+    return getASCIIFromGrayScale(0.2989*red + 0.587*green + 0.114*blue);
 }
 
 
-void fitImageSize( Int* width, Int* height, Int targetWidth, Int targetHeight )
+void fitImageSize(Int* width, Int* height, Int targetWidth, Int targetHeight)
 {
-    if ( targetWidth < *width )
+    if (targetWidth < *width)
     {
         *height = (targetWidth*(*height)) / (*width);
         *width = targetWidth;
     }
-    if ( targetHeight < *height )
+    if (targetHeight < *height)
     {
         *width = (targetHeight*(*width)) / (*height);
         *height = targetHeight;
@@ -357,18 +367,18 @@ void fitImageSize( Int* width, Int* height, Int targetWidth, Int targetHeight )
 }
 
 
-Int resizeImage( const UChar* image, UChar* newImage, Int width, Int height, Int numberOfChannels, Int newWidth, Int newHeight )
+Int resizeImage(const UChar* image, UChar* newImage, Int width, Int height, Int numberOfChannels, Int newWidth, Int newHeight)
 {
-    PTERM_DEBUG_PRINTF( "Resizing image to %ix%i\n", newWidth, newHeight );
+    PTERM_DEBUG_PRINTF("Resizing image to %ix%i\n", newWidth, newHeight);
 
     Int resizeResult = stbir_resize_uint8(
         image, width, height, 0,
         newImage, newWidth, newHeight, 0, numberOfChannels
     );
 
-    if ( !resizeResult )
+    if (!resizeResult)
     {
-        PTERM_DEBUG_PRINTF( "Image resizing errored out (error %i)\n", resizeResult );
+        PTERM_DEBUG_PRINTF("Image resizing errored out (error %i)\n", resizeResult);
         return PTERM_FAIL;
     }
 
@@ -376,13 +386,15 @@ Int resizeImage( const UChar* image, UChar* newImage, Int width, Int height, Int
 }
 
 
-UChar* loadImageFile( const Char* fileName,
-                      UInt* numberOfFrames,
-                      Int** frameDelaysMS,
-                      UInt* width,
-                      UInt* height,
-                      UInt* numberOfOriginalChannels,
-                      UInt* numberOfOutputChannels )
+Int convertImage(UChar** data,
+                 UInt size,
+                 const Char* extension,
+                 UInt* numberOfFrames,
+                 Int** frameDelaysMS,
+                 UInt* width,
+                 UInt* height,
+                 UInt* numberOfOriginalChannels,
+                 UInt* numberOfOutputChannels)
 {
     // Init
     *numberOfFrames           = 0;
@@ -391,33 +403,20 @@ UChar* loadImageFile( const Char* fileName,
     *height                   = 0;
     *numberOfOriginalChannels = 0;
 
-    // Load file
-    UInt fileSize = 0;
-    UChar* data = loadFile( fileName, &fileSize );
-
-    if ( !data )
-    {
-        PTERM_DEBUG_PRINTF( "Failed to load %s\n", fileName );
-        return NULL;
-    }
-
-    if ( !fileSize )
-        PTERM_DEBUG_PRINTF( "%s is empty!\n", fileName );
-
     // Check file extension
     Bool isGIF = PTERM_FALSE;
-    if ( strcmp( fileExtension(fileName), ".gif" ) == 0 )
+    if (strcmp(extension, ".gif") == 0)
         isGIF = PTERM_TRUE;
 
     // Set output channels
     *numberOfOutputChannels = 4; // <-- Convert to RGBA no matter how many channels the input has
 
     // Decode frames
-    if ( isGIF == PTERM_TRUE )
+    if (isGIF == PTERM_TRUE)
     {
         UChar* tmp = stbi_load_gif_from_memory(
-            data,
-            fileSize,
+            *data,
+            size,
             frameDelaysMS,
             width,
             height,
@@ -425,60 +424,103 @@ UChar* loadImageFile( const Char* fileName,
             numberOfOriginalChannels,
             *numberOfOutputChannels
         );
-        free(data);
-        data = tmp;
+        free(*data);
+        *data = tmp;
     } // isGIF
     else
     {
         UChar* tmp = stbi_load_from_memory(
-            data,
-            fileSize,
+            *data,
+            size,
             width,
             height,
             numberOfOriginalChannels,
             *numberOfOutputChannels
         );
-        free(data);
-        data = tmp;
+        free(*data);
+        *data = tmp;
 
         *numberOfFrames = 1;
-        *frameDelaysMS = (Int*) malloc( sizeof(Int) );
+        *frameDelaysMS = (Int*) malloc(sizeof(Int));
 
-        if ( !*frameDelaysMS )
+        if (!*frameDelaysMS)
         {
-            PTERM_DEBUG_PRINTF( "Failed to allocate memory for frame delays (%ib)\n", 1 );
-            exit( PTERM_MEMORY_ERROR );
+            PTERM_DEBUG_PRINTF("Failed to allocate memory for frame delays (%ib)\n", 1);
+            exit(PTERM_MEMORY_ERROR);
         }
 
         (*frameDelaysMS)[0] = 0;
     } // !isGIF
 
-    if ( !data )
+    if (!*data)
     {
-        PTERM_DEBUG_PRINTF( "Failed to load image from %s\n", fileName );
-        free( *frameDelaysMS );
+        PTERM_DEBUG_PRINTF("Failed to load image from %s\n", fileName);
+        free(*frameDelaysMS);
+        return PTERM_INPUT_ERROR;
+    }
+
+    if (!*width || !*height || !*numberOfOriginalChannels || !*numberOfFrames)
+    {
+        PTERM_DEBUG_PRINTF("Empty image %ix%ix%i with %i frames\n", *width, *height, *numberOfOriginalChannels, *numberOfFrames);
+        free(*data);
+        free(*frameDelaysMS);
+        return PTERM_INPUT_ERROR;
+    }
+
+    if (*numberOfOriginalChannels != *numberOfOutputChannels)
+        PTERM_DEBUG_PRINTF("Warning: source image has %i channels. Converted it to RGBA!\n", *numberOfOriginalChannels);
+
+    return PTERM_SUCCESS;
+}
+
+
+UChar* loadImageFile(const Char* fileName,
+                      UInt* numberOfFrames,
+                      Int** frameDelaysMS,
+                      UInt* width,
+                      UInt* height,
+                      UInt* numberOfOriginalChannels,
+                      UInt* numberOfOutputChannels)
+{
+    // Load file
+    UInt fileSize = 0;
+    UChar* data = loadFile(fileName, &fileSize);
+
+    if (!data)
+    {
+        PTERM_DEBUG_PRINTF("Failed to load %s\n", fileName);
         return NULL;
     }
 
-    if ( !*width || !*height || !*numberOfOriginalChannels || !*numberOfFrames )
-    {
-        PTERM_DEBUG_PRINTF( "Empty image %ix%ix%i with %i frames\n", *width, *height, *numberOfOriginalChannels, *numberOfFrames );
-        free( data );
-        free( *frameDelaysMS );
-        return NULL;
-    }
+    if (!fileSize)
+        PTERM_DEBUG_PRINTF("%s is empty!\n", fileName);
 
-    if ( *numberOfOriginalChannels != *numberOfOutputChannels )
-        PTERM_DEBUG_PRINTF( "Warning: source image has %i channels. Convertex it to RGBA!\n", *numberOfOriginalChannels );
+    Int conversionOutput = convertImage(
+        &data,
+        fileSize,
+        fileExtension(fileName),
+        numberOfFrames,
+        frameDelaysMS,
+        width,
+        height,
+        numberOfOriginalChannels,
+        numberOfOutputChannels
+    );
+
+    if (conversionOutput != PTERM_SUCCESS)
+    {
+        puts("Failed to convert image");
+        exit(conversionOutput);
+    }
 
     return data;
 }
 
 
-void allocateANSITextImage( UChar** textImage,
-                            UInt* size,
-                            UInt width,
-                            UInt height )
+void allocateANSITextImage(UChar** textImage,
+                           UInt* size,
+                           UInt width,
+                           UInt height)
 {
     *textImage = NULL;
     *size      = 0;
@@ -488,44 +530,44 @@ void allocateANSITextImage( UChar** textImage,
         * (ansiColorSize + 1)               // <-- payload (ANSI color and a character)
         + height * (ansiColorResetSize + 1) // <-- new line and color reset at line ends
         + 1;                                // <-- \0
-    *textImage = (UChar*) malloc( *size );
+    *textImage = (UChar*) malloc(*size);
 
-    if ( !*textImage )
+    if (!*textImage)
     {
-        PTERM_DEBUG_PRINTF( "Failed to allocate memory for text image (%ib)\n", *size );
+        PTERM_DEBUG_PRINTF("Failed to allocate memory for text image (%ib)\n", *size);
         *size = 0;
     }
 }
 
 
-UChar* textFromImageInMemory( const UChar* image,
+UChar* textFromImageInMemory(const UChar* image,
                               UInt width,
                               UInt height,
                               UInt numberOfChannels,
                               UInt targetWidth,
                               UInt targetHeight,
-                              Bool backgroundOnly )
+                              Bool backgroundOnly)
 {
     // Resize image if necessary
     const UChar* frame = image;
-    if ( width != targetWidth || height != targetHeight )
+    if (width != targetWidth || height != targetHeight)
     {
-        UChar* tmp = (UChar*) malloc( targetWidth * targetHeight * numberOfChannels );
-        if ( !frame )
+        UChar* tmp = (UChar*) malloc(targetWidth * targetHeight * numberOfChannels);
+        if (!frame)
         {
-            PTERM_DEBUG_PRINTF( "Failed to allocate memory for resized image (%ib)\n", targetWidth*targetHeight*numberOfChannels );
-            exit( PTERM_MEMORY_ERROR );
+            PTERM_DEBUG_PRINTF("Failed to allocate memory for resized image (%ib)\n", targetWidth*targetHeight*numberOfChannels);
+            exit(PTERM_MEMORY_ERROR);
         }
 
-        Int resizeOutput = resizeImage( image,
+        Int resizeOutput = resizeImage(image,
                                         tmp,
                                         width,
                                         height,
                                         numberOfChannels,
                                         targetWidth,
-                                        targetHeight );
-        if ( resizeOutput )
-            exit( resizeOutput );
+                                        targetHeight);
+        if (resizeOutput)
+            exit(resizeOutput);
 
         frame = tmp;
     } // if resize
@@ -533,78 +575,78 @@ UChar* textFromImageInMemory( const UChar* image,
     // Allocate output
     UInt outputSize = 0;
     UChar* output = NULL;
-    allocateANSITextImage( &output, &outputSize, targetWidth, targetHeight );
+    allocateANSITextImage(&output, &outputSize, targetWidth, targetHeight);
 
-    if ( !output )
+    if (!output)
         return NULL;
 
     // Assemble output
-    _textFromImageInMemory( frame,
+    _textFromImageInMemory(frame,
                             output,
                             targetWidth,
                             targetHeight,
                             numberOfChannels,
-                            backgroundOnly );
+                            backgroundOnly);
 
     // Deallocate if the image was resized
-    if ( width != targetWidth || height != targetHeight )
-        free( (UChar*)frame );
+    if (width != targetWidth || height != targetHeight)
+        free((UChar*)frame);
 
     return output;
 }
 
 
-void _textFromImageInMemory( const UChar* image,
+void _textFromImageInMemory(const UChar* image,
                              UChar* destination,
                              UInt width,
                              UInt height,
                              UInt numberOfChannels,
-                             Bool backgroundOnly )
+                             Bool backgroundOnly)
 {
     // Init
     UChar pixel[4];
 
-    if ( !pixel )
+    if (!pixel)
     {
-        PTERM_DEBUG_PRINTF( "Failed to allocate pixel of size %i\n", numberOfChannels );
-        exit( PTERM_MEMORY_ERROR );
+        PTERM_DEBUG_PRINTF("Failed to allocate pixel of size %i\n", numberOfChannels);
+        exit(PTERM_MEMORY_ERROR);
     }
 
     // Assemble output
     UChar* cursor = destination;
 
-    for ( UInt rowIndex=0; rowIndex<height; ++rowIndex )
+    for (UInt rowIndex=0; rowIndex<height; ++rowIndex)
     {
-        for ( UInt columnIndex=0; columnIndex<width; ++columnIndex )
+        for (UInt columnIndex=0; columnIndex<width; ++columnIndex)
         {
-            getPixel( image,
+            getPixel(image,
                       pixel,
                       rowIndex,
                       columnIndex,
                       width,
                       height,
-                      numberOfChannels );
+                      numberOfChannels);
 
-            if ( 0 < pixel[3] )
+            if (0 < pixel[3])
             {
-                ansiColorCode( pixel[0], pixel[1], pixel[2], cursor, backgroundOnly );
+                ansiColorCode(pixel[0], pixel[1], pixel[2], cursor, backgroundOnly);
 
                 cursor += ansiColorSize;
 
-                if ( backgroundOnly )
+                if (backgroundOnly)
                     *cursor++ = ' ';
                 else
-                    *cursor++ = getASCIIFromRGB( pixel[0], pixel[1], pixel[2] );
+                    *cursor++ = getASCIIFromRGB(pixel[0], pixel[1], pixel[2]);
             }
             else
             {
-                ansiPadding( cursor );
+                ansiPadding(cursor);
                 cursor += ansiColorSize;
                 *cursor++ = ' ';
             }
         } // for columnIndex
 
-        ansiReset( cursor );
+        ansiReset(cursor);
         cursor += ansiColorResetSize;
 
         *cursor++ = '\n';
