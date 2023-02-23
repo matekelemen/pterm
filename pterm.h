@@ -354,13 +354,11 @@ UChar getASCIIFromRGB(UChar red, UChar green, UChar blue)
 
 void fitImageSize(Int* width, Int* height, Int targetWidth, Int targetHeight)
 {
-    if (targetWidth < *width)
-    {
+    if (targetWidth < *width) {
         *height = (targetWidth*(*height)) / (*width);
         *width = targetWidth;
     }
-    if (targetHeight < *height)
-    {
+    if (targetHeight < *height) {
         *width = (targetHeight*(*width)) / (*height);
         *height = targetHeight;
     }

@@ -21,14 +21,14 @@
 
 
 
-/// Get parent terminal size on linux
-void getTerminalSize(Int* rows, Int* columns)
+/// Get parent terminal size on linux.
+void getTerminalSize(Int* columns, Int* rows)
 {
     #if _WIN32
         CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
         HANDLE terminal = GetStdHandle(STD_OUTPUT_HANDLE);
         GetConsoleScreenBufferInfo(terminal, &bufferInfo);
-        *rows = bufferInfo.srWindow.Bottom - bufferInfo.srWindow.Top;
+        *rows = (bufferInfo.srWindow.Bottom - bufferInfo.srWindow.Top) - 1;
         *columns = bufferInfo.srWindow.Right - bufferInfo.srWindow.Left + 1;
 
         DWORD drawMode = 0;
@@ -158,61 +158,47 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
     };
 
     // Parse arguments
-    for (Int i=1; i<argc; ++i)
-    {
+    for (Int i=1; i<argc; ++i) {
         Char token = argv[i][0];
 
-        if (token == '\0') // empty argument
+        if (token == '\0') { // empty argument
             continue;
+        }
 
-        if (token != '-') // value argument
-        {
-            if (intFlag)
-            {
+        if (token != '-') { // value argument
+            if (intFlag) {
                 *intArguments[intFlag] = parseInteger(argv[i]);
                 intFlag = NULL_FLAG;
                 continue;
-            }
-            else if (stringFlag)
-            {
+            } else if (stringFlag) {
                 copyString(argv[i], stringArguments[stringFlag]);
                 stringFlag = NULL_FLAG;
                 continue;
-            }
-            else // no flag set before value => must be file name
-            {
+            } else { // no flag set before value => must be file name
                 copyString(argv[i], &p_parameters->fileName);
                 continue;
             }
-        }
-
-        else // flag argument
-        {
+        } else { // flag argument
             // Check whether we're expecting a value
-            if (intFlag || stringFlag)
-            {
+            if (intFlag || stringFlag) {
                 printf("Argument error: expecting a value but got a flag: %s", argv[i]);
                 return PTERM_FALSE;
             }
 
             token = argv[i][1];
-            if (token == 'b') // flag: backgroundOnly
-            {
+            if (token == 'b') { // flag: backgroundOnly
                 p_parameters->backgroundOnly = PTERM_TRUE;
                 continue;
             }
-            if (token == 'w') // width => expecting an integer value
-            {
+            if (token == 'w') { // width => expecting an integer value
                 intFlag = 1;
                 continue;
             }
-            if (token == 'h') // height => expecting an integer value
-            {
+            if (token == 'h') { // height => expecting an integer value
                 intFlag = 2;
                 continue;
             }
-            if(token == 't') // file type => expecting a string value
-            {
+            if(token == 't') { // file type => expecting a string value
                 stringFlag = 2;
                 continue;
             }
@@ -224,27 +210,24 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
     } // for argc
 
     // Postprocess
-    if (p_parameters->fileName && p_parameters->extension)
-    {
+    if (p_parameters->fileName && p_parameters->extension) {
         puts("Cannot specify both file name and extension");
         return PTERM_FALSE;
     }
 
-    if (p_parameters->fileName && strcmp(fileExtension(p_parameters->fileName), ".gif") == 0)
+    if (p_parameters->fileName && strcmp(fileExtension(p_parameters->fileName), ".gif") == 0) {
         p_parameters->isGIF = PTERM_TRUE;
+    }
 
-    if (p_parameters->width && p_parameters->height)
-    {
+    if (p_parameters->width && p_parameters->height) {
         printf("Width and height cannot be specified at the same time");
         return PTERM_FALSE;
     }
 
-    if (!p_parameters->extension)
-    {
-        if (p_parameters->fileName)
+    if (!p_parameters->extension) {
+        if (p_parameters->fileName) {
             p_parameters->extension = strdup(fileExtension(p_parameters->fileName));
-        else
-        {
+        } else {
             p_parameters->extension = (Char*) malloc(sizeof(Char));
             p_parameters->extension[0] = '\0';
         }
@@ -258,39 +241,30 @@ void getFinalImageSize(Parameters* p_parameters, Int originalWidth, Int original
 {
     Int targetWidth = originalWidth, targetHeight = originalHeight;
 
-    if (p_parameters->width || p_parameters->height)
-    {
-        if (p_parameters->width && !p_parameters->height)
-        {
+    if (p_parameters->width || p_parameters->height) {
+        if (p_parameters->width && !p_parameters->height) {
             targetWidth = p_parameters->width;
             targetHeight = p_parameters->width / (double)originalWidth * originalHeight;
-        }
-        else if (!p_parameters->width && p_parameters->height)
-        {
+        } else if (!p_parameters->width && p_parameters->height) {
             targetWidth = p_parameters->height / (double)originalHeight * originalWidth;
             targetHeight = p_parameters->height;
-        }
-        else
-        {
+        } else {
             targetWidth = p_parameters->width;
             targetHeight = p_parameters->height;
         }
-    }
-    else // no requested size => fit to terminal size
-    {
+    } else { // no requested size => fit to terminal size
         getTerminalSize(&targetWidth, &targetHeight);
 
-        if (!targetWidth || !targetHeight)
-        {
+        if (!targetWidth || !targetHeight) {
             printf("Invalid terminal size: %ix%i\n", targetHeight, targetWidth);
             exit(PTERM_ENVIRONMENT_ERROR);
         }
 
-        PTERM_DEBUG_PRINTF("Detected %ix%i terminal\n", targetHeight, targetWidth);
+        PTERM_DEBUG_PRINTF("Detected %ix%i terminal\n", targetWidth, targetHeight);
     }
 
     p_parameters->width = originalWidth;
-    p_parameters->height = originalHeight;
+    p_parameters->height = originalHeight / 2; // adjust for terminal cell skewness
     fitImageSize(&p_parameters->width, &p_parameters->height, targetWidth, targetHeight);
 }
 
@@ -302,8 +276,7 @@ int main(int argc, char const* argv[])
     Parameters parameters;
     initializeParameters(&parameters);
 
-    if (!parseArguments(argc, argv, &parameters))
-    {
+    if (!parseArguments(argc, argv, &parameters)) {
         printHelp();
         return PTERM_ARGUMENT_ERROR;
     }
@@ -313,7 +286,7 @@ int main(int argc, char const* argv[])
     Int* delays = NULL;
 
     UChar* data = NULL;
-    if (parameters.fileName)
+    if (parameters.fileName) {
         data = loadImageFile(
             parameters.fileName,
             &numberOfFrames,
@@ -323,8 +296,7 @@ int main(int argc, char const* argv[])
             &numberOfSourceChannels,
             &numberOfChannels
         );
-    else if (parameters.extension)
-    {
+    } else if (parameters.extension) {
         UInt size = 0;
         readPipe(&data, &size);
         Int conversionOutput = convertImage(
@@ -344,34 +316,28 @@ int main(int argc, char const* argv[])
             printf("Failed to convert image from stdin (%i)\n", conversionOutput);
             exit(conversionOutput);
         }
-    }
-    else
-    {
+    } else {
         puts("No input");
         exit(PTERM_INPUT_ERROR);
     }
 
-    if (parameters.fileName)
-    {
+    if (parameters.fileName) {
         free(parameters.fileName);
         parameters.fileName = NULL;
     }
 
-    if (parameters.extension)
-    {
+    if (parameters.extension) {
         free(parameters.extension);
         parameters.extension = NULL;
     }
 
-    if (numberOfChannels != 4)
-    {
+    if (numberOfChannels != 4) {
         PTERM_DEBUG_PRINTF("Invalid number of channels (%i)\n", numberOfChannels);
         exit(PTERM_FAIL);
     }
 
     // Get target image sizes
     getFinalImageSize(&parameters, imageWidth, imageHeight);
-    parameters.height /= 2; // adjust for terminal cell skewness
 
     UChar* frame = data;
     UChar* resizedImage;
@@ -379,20 +345,17 @@ int main(int argc, char const* argv[])
     UInt resizedFrameSize = parameters.width * parameters.height * numberOfChannels;
 
     // Resize frames if necessary
-    if (parameters.width!=imageWidth || parameters.height!=imageHeight)
-    {
+    if (parameters.width!=imageWidth || parameters.height!=imageHeight) {
         resizedImage = (UChar*) malloc(resizedFrameSize * numberOfFrames);
         resizedFrame = resizedImage;
 
-        if (!resizedImage)
-        {
+        if (!resizedImage) {
             printf("Failed to allocate memory for resized image (%ib)", resizedFrameSize * numberOfFrames);
             exit(PTERM_MEMORY_ERROR);
         }
 
         UInt frameSize = imageWidth*imageHeight*numberOfChannels;
-        for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=frameSize, resizedFrame+=resizedFrameSize)
-        {
+        for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, frame+=frameSize, resizedFrame+=resizedFrameSize) {
             Int resizeOutput = resizeImage(
                 frame,
                 resizedFrame,
@@ -408,9 +371,7 @@ int main(int argc, char const* argv[])
         }
 
         free(data);
-    }
-    else // no resizing needed
-    {
+    } else { // no resizing needed
         resizedImage = data;
         resizedFrame = resizedImage;
     }
@@ -419,8 +380,7 @@ int main(int argc, char const* argv[])
     UChar* output = NULL;
     allocateANSITextImage(&output, &outputSize, parameters.width, parameters.height);
 
-    if (!output)
-    {
+    if (!output) {
         printf("Failed to allocate output of size %i\n", outputSize);
         exit(PTERM_MEMORY_ERROR);
     }
@@ -431,8 +391,7 @@ int main(int argc, char const* argv[])
     resizedFrame     = resizedImage;
     UInt* frameDelay = (UInt*)delays;
 
-    for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay)
-    {
+    for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay) {
         _textFromImageInMemory(
             resizedFrame,
             output,
@@ -444,8 +403,9 @@ int main(int argc, char const* argv[])
 
         // Print
         double sleepTime = (*frameDelay) - difftime(clock(), time)/1000.0;
-        if (0 < sleepTime)
+        if (0 < sleepTime) {
             usleep(1000 * sleepTime);
+        }
         time = clock();
 
         fwrite(output, sizeof(UChar), outputSize, stdout);

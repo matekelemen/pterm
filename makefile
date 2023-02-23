@@ -1,10 +1,10 @@
 .PHONY : all clean
 all=pterm
-CFLAGS=-O3 -DNDEBUG
+CFLAGS=-O3 -DNDEBUG -march=native -funsafe-math-optimizations
 LIBS=-lm
 
 pterm: main.o
-	gcc -o $@ $^ $(LIBS)
+	cc -o $@ $^ $(LIBS)
 
 clean:
 	rm -rf *.o pterm
