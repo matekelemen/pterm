@@ -1,9 +1,13 @@
 *
 
+!.github
 !.github/alpha.gif
 !.github/animated_terminal.gif
 !.github/colored_background.png
+!.github/workflows
+!.github/workflows/ci.yml
 
+!data
 !data/02.gif
 !data/alpha.gif
 !data/code_doge.gif
