@@ -197,7 +197,7 @@ PTERM_INLINE void ansiColorCode(UChar red, UChar green, UChar blue, UChar* ansi,
 
     *ansi++ = (green / 100)+'0';
     *ansi++ = ((green%100) / 10)+'0';
-    *ansi++ = (blue%10)+'0';
+    *ansi++ = (green%10)+'0';
     *ansi++ = ';';
 
     *ansi++ = (blue / 100)+'0';
