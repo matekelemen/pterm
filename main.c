@@ -97,26 +97,22 @@ void readPipe(UChar** content, UInt* size)
     // Initial allocation
     *size = 0;
     *content = (UChar*) malloc(bufferSize * sizeof(UChar));
-    if (!*content)
-    {
-        puts("Failed to allocate initial memory for reading stdin");
+    if (!*content) {
+        puts("Error: failed to allocate initial memory for reading stdin");
         exit(PTERM_MEMORY_ERROR);
     }
 
     UChar* begin = *content;
 
     // Read loop
-    while(PTERM_TRUE)
-    {
+    while(PTERM_TRUE) {
         // Extend memory if necessary
-        if (bufferSize <= (unsigned long)(begin - *content))
-        {
+        if (bufferSize <= (unsigned long)(begin - *content)) {
             UChar* tmp = *content;
             bufferSize += chunkSize;
             *content = (UChar*) realloc(*content, bufferSize * sizeof(UChar));
-            if (!*content)
-            {
-                printf("Failed to extend memory while reading stdin (%ub)", *size);
+            if (!*content) {
+                printf("Error: failed to extend memory while reading stdin (%ub)", *size);
                 free(tmp);
                 exit(PTERM_MEMORY_ERROR);
             }
@@ -205,13 +201,13 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
         }
 
         // Unhandled
-        printf("Unrecognized argument: %s\n", argv[i]);
+        printf("Error: unrecognized argument: %s\n", argv[i]);
         return PTERM_FALSE;
     } // for argc
 
     // Postprocess
     if (p_parameters->fileName && p_parameters->extension) {
-        puts("Cannot specify both file name and extension");
+        puts("Error: cannot specify both file name and extension");
         return PTERM_FALSE;
     }
 
@@ -220,7 +216,7 @@ Bool parseArguments(int argc, const char* argv[], Parameters* p_parameters)
     }
 
     if (p_parameters->width && p_parameters->height) {
-        printf("Width and height cannot be specified at the same time");
+        printf("Error: width and height cannot be specified at the same time");
         return PTERM_FALSE;
     }
 
@@ -256,7 +252,7 @@ void getFinalImageSize(Parameters* p_parameters, Int originalWidth, Int original
         getTerminalSize(&targetWidth, &targetHeight);
 
         if (!targetWidth || !targetHeight) {
-            printf("Invalid terminal size: %ix%i\n", targetHeight, targetWidth);
+            printf("Error: invalid terminal size: %ix%i\n", targetHeight, targetWidth);
             exit(PTERM_ENVIRONMENT_ERROR);
         }
 
@@ -287,37 +283,33 @@ int main(int argc, char const* argv[])
 
     UChar* data = NULL;
     if (parameters.fileName) {
-        data = loadImageFile(
-            parameters.fileName,
-            &numberOfFrames,
-            &delays,
-            &imageWidth,
-            &imageHeight,
-            &numberOfSourceChannels,
-            &numberOfChannels
-        );
+        data = loadImageFile(parameters.fileName,
+                             &numberOfFrames,
+                             &delays,
+                             &imageWidth,
+                             &imageHeight,
+                             &numberOfSourceChannels,
+                             &numberOfChannels);
     } else if (parameters.extension) {
         UInt size = 0;
         readPipe(&data, &size);
-        Int conversionOutput = convertImage(
-            &data,
-            size,
-            parameters.extension,
-            &numberOfFrames,
-            &delays,
-            &imageWidth,
-            &imageHeight,
-            &numberOfSourceChannels,
-            &numberOfChannels
-        );
+        Int conversionOutput = convertImage(&data,
+                                            size,
+                                            parameters.extension,
+                                            &numberOfFrames,
+                                            &delays,
+                                            &imageWidth,
+                                            &imageHeight,
+                                            &numberOfSourceChannels,
+                                            &numberOfChannels);
 
-        if (conversionOutput != PTERM_SUCCESS)
-        {
-            printf("Failed to convert image from stdin (%i)\n", conversionOutput);
+        if (conversionOutput != PTERM_SUCCESS) {
+            printf("Error: failed to convert image from stdin (%i)\n", conversionOutput);
             exit(conversionOutput);
         }
     } else {
-        puts("No input");
+        puts("Error: no input");
+        printHelp();
         exit(PTERM_INPUT_ERROR);
     }
 
@@ -332,7 +324,7 @@ int main(int argc, char const* argv[])
     }
 
     if (numberOfChannels != 4) {
-        PTERM_DEBUG_PRINTF("Invalid number of channels (%i)\n", numberOfChannels);
+        PTERM_DEBUG_PRINTF("Error: invalid number of channels (%i)\n", numberOfChannels);
         exit(PTERM_FAIL);
     }
 
@@ -350,7 +342,7 @@ int main(int argc, char const* argv[])
         resizedFrame = resizedImage;
 
         if (!resizedImage) {
-            printf("Failed to allocate memory for resized image (%ib)", resizedFrameSize * numberOfFrames);
+            printf("Error: failed to allocate memory for resized image (%ib)", resizedFrameSize * numberOfFrames);
             exit(PTERM_MEMORY_ERROR);
         }
 
@@ -381,25 +373,23 @@ int main(int argc, char const* argv[])
     allocateANSITextImage(&output, &outputSize, parameters.width, parameters.height);
 
     if (!output) {
-        printf("Failed to allocate output of size %i\n", outputSize);
+        printf("Error: failed to allocate output of size %i\n", outputSize);
         exit(PTERM_MEMORY_ERROR);
     }
 
     // Loop through frames
-    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IOFBF, outputSize);
     clock_t time     = clock();
     resizedFrame     = resizedImage;
     UInt* frameDelay = (UInt*)delays;
 
     for (UInt frameIndex=0; frameIndex<numberOfFrames; ++frameIndex, resizedFrame+=resizedFrameSize, ++frameDelay) {
-        _textFromImageInMemory(
-            resizedFrame,
-            output,
-            parameters.width,
-            parameters.height,
-            numberOfChannels,
-            parameters.backgroundOnly
-        );
+        _textFromImageInMemory(resizedFrame,
+                               output,
+                               parameters.width,
+                               parameters.height,
+                               numberOfChannels,
+                               parameters.backgroundOnly);
 
         // Print
         double sleepTime = (*frameDelay) - difftime(clock(), time)/1000.0;

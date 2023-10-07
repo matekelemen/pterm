@@ -1,17 +1,22 @@
-.vscode
+*
 
-*.pyc
-*.pyd
-__pycache__
+!.github
+!.github/alpha.gif
+!.github/animated_terminal.gif
+!.github/colored_background.png
+!.github/workflows
+!.github/workflows/ci.yml
 
-*.log
-*.lib
-*.html
+!data
+!data/02.gif
+!data/alpha.gif
+!data/code_doge.gif
 
-# Linux
-*.o
-*.so
-pterm
-
-# Windows
-*.exe
+!.gitignore
+!CMakeLists.txt
+!main.c
+!makefile
+!pterm.h
+!readme.md
+!stb_image_resize.h
+!stb_image.h

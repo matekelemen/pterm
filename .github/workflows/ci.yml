@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "*.gif"
+      - "*.png"
+      - "*.gitignore"
+      - "readme.md"
+      - "license"
+    workflow_dispatch:
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        run: git clone https://github.com/matekelemen/pterm.git --depth 1
+      - name: Build
+        run: cd pterm && make
+      - uses: actions/upload-artifact@v3
+        with:
+          name: pterm
+          path: pterm/pterm
