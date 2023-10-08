@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 
 
 // Define PTERM_IMPLEMENTATION for a single source
@@ -95,9 +96,9 @@ UChar* textFromImageInMemory(const UChar* image,
  *  @param height text image height
  */
 void allocateANSITextImage(UChar** textImage,
-                            UInt* size,
-                            UInt width,
-                            UInt height);
+                           UInt* size,
+                           UInt width,
+                           UInt height);
 
 /** @brief Convert image to text
  *  @details Convert an 8-bit-per channel image into ANSI-colored text. No allocations/deallocations
@@ -150,7 +151,12 @@ void _textFromImageInMemory(const UChar* image,
     #define PTERM_INLINE
 #else
     #define PTERM_DEBUG_PRINTF(...)
-    #define PTERM_INLINE inline
+
+    #ifdef __cplusplus
+        #define PTERM_INLINE inline
+    #else
+        #define PTERM_INLINE
+    #endif
 #endif
 
 
@@ -213,8 +219,7 @@ PTERM_INLINE void ansiColorCode(UChar red, UChar green, UChar blue, UChar* ansi,
 /// @note ansi must be allocated and at least [ansiColorResetSize] long.
 PTERM_INLINE void ansiReset(UChar* ansi)
 {
-    for (const UChar* c=ansiColorReset; c!=ansiColorReset+ansiColorResetSize; ++c, ++ansi )
-        *ansi = *c;
+    memcpy(ansi, ansiColorReset, ansiColorResetSize);
 }
 
 
@@ -223,7 +228,25 @@ PTERM_INLINE void ansiReset(UChar* ansi)
  */
 PTERM_INLINE void ansiPadding(UChar* ansi)
 {
-    ansi = (UChar*) "\e[11;31;49m \b \b \b";
+    *ansi++ = '\e';
+    *ansi++ = '[';
+    *ansi++ = '1';
+    *ansi++ = '1';
+    *ansi++ =  ';';
+    *ansi++ =  '3';
+    *ansi++ =  '1';
+    *ansi++ =  ';';
+    *ansi++ =  '4';
+    *ansi++ =  '9';
+    *ansi++ = 'm';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi++ = '\b';
+    *ansi++ = ' ';
+    *ansi = '\b';
 }
 
 
@@ -297,15 +320,15 @@ const Char* fileExtension(const Char* fileName)
     const Char* extension = fileName;
     const Char* tmp = fileName;
 
-    while (*tmp != '\0')
-    {
+    while (*tmp != '\0') {
         if (*tmp == '.')
             extension = tmp;
         ++tmp;
     }
 
-    if (extension == fileName) // no extension
+    if (extension == fileName) { // no extension
         extension = tmp;
+    }
 
     return extension;
 }
@@ -522,11 +545,9 @@ UChar* textFromImageInMemory(const UChar* image,
 {
     // Resize image if necessary
     const UChar* frame = image;
-    if (width != targetWidth || height != targetHeight)
-    {
+    if (width != targetWidth || height != targetHeight) {
         UChar* tmp = (UChar*) malloc(targetWidth * targetHeight * numberOfChannels);
-        if (!frame)
-        {
+        if (!frame) {
             PTERM_DEBUG_PRINTF("Failed to allocate memory for resized image (%ib)\n", targetWidth*targetHeight*numberOfChannels);
             exit(PTERM_MEMORY_ERROR);
         }
@@ -538,8 +559,9 @@ UChar* textFromImageInMemory(const UChar* image,
                                         numberOfChannels,
                                         targetWidth,
                                         targetHeight);
-        if (resizeOutput)
+        if (resizeOutput) {
             exit(resizeOutput);
+        }
 
         frame = tmp;
     } // if resize
@@ -549,8 +571,9 @@ UChar* textFromImageInMemory(const UChar* image,
     UChar* output = NULL;
     allocateANSITextImage(&output, &outputSize, targetWidth, targetHeight);
 
-    if (!output)
+    if (!output) {
         return NULL;
+    }
 
     // Assemble output
     _textFromImageInMemory(frame,
