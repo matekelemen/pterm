@@ -61,12 +61,12 @@ typedef UInt            Bool;
  * @param numberOfOutputChannels number of channels in the loaded image (always set to 4 for RGBA)
  */
 UChar* loadImageFile(const Char* fileName,
-                     UInt* numberOfFrames,
+                     Int* numberOfFrames,
                      Int** frameDelaysMS,
-                     UInt* width,
-                     UInt* height,
-                     UInt* numberOfOriginalChannels,
-                     UInt* numberOfOutputChannels);
+                     Int* width,
+                     Int* height,
+                     Int* numberOfOriginalChannels,
+                     Int* numberOfOutputChannels);
 
 /** @brief Convert image to text
  *  @details Convert an 8-bit-per-channel image into ANSI-colored text. The function allocates memory
@@ -386,14 +386,14 @@ Int resizeImage(const UChar* image, UChar* newImage, Int width, Int height, Int 
 
 
 Int convertImage(UChar** data,
-                 UInt size,
+                 Int size,
                  const Char* extension,
-                 UInt* numberOfFrames,
+                 Int* numberOfFrames,
                  Int** frameDelaysMS,
-                 UInt* width,
-                 UInt* height,
-                 UInt* numberOfOriginalChannels,
-                 UInt* numberOfOutputChannels)
+                 Int* width,
+                 Int* height,
+                 Int* numberOfOriginalChannels,
+                 Int* numberOfOutputChannels)
 {
     // Init
     *numberOfFrames           = 0;
@@ -471,12 +471,12 @@ Int convertImage(UChar** data,
 
 
 UChar* loadImageFile(const Char* fileName,
-                      UInt* numberOfFrames,
-                      Int** frameDelaysMS,
-                      UInt* width,
-                      UInt* height,
-                      UInt* numberOfOriginalChannels,
-                      UInt* numberOfOutputChannels)
+                     Int* numberOfFrames,
+                     Int** frameDelaysMS,
+                     Int* width,
+                     Int* height,
+                     Int* numberOfOriginalChannels,
+                     Int* numberOfOutputChannels)
 {
     // Load file
     UInt fileSize = 0;
@@ -600,11 +600,6 @@ void _textFromImageInMemory(const UChar* image,
 {
     // Init
     UChar pixel[4];
-
-    if (!pixel) {
-        PTERM_DEBUG_PRINTF("Failed to allocate pixel of size %i\n", numberOfChannels);
-        exit(PTERM_MEMORY_ERROR);
-    }
 
     // Assemble output
     UChar* cursor = destination;

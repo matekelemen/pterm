@@ -278,7 +278,7 @@ int main(int argc, char const* argv[])
     }
 
     // Read image (and convert to RGB if necessary)
-    UInt imageWidth=0, imageHeight=0, numberOfChannels=0, numberOfSourceChannels=0, numberOfFrames=0;
+    Int imageWidth=0, imageHeight=0, numberOfChannels=0, numberOfSourceChannels=0, numberOfFrames=0;
     Int* delays = NULL;
 
     UChar* data = NULL;
