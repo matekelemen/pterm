@@ -1,0 +1,23 @@
+BootStrap: docker
+From: ubuntu:22.04
+
+%post -c /bin/bash
+    cd "$HOME"
+    if ! apt update -y; then
+        exit 1
+    fi
+
+    if ! apt install -y --no-install-recommends \
+        ca-certificates                         \
+	git                                     \
+        build-essential                         \
+        ; then
+        exit 1
+    fi
+
+    git clone https://github.com/matekelemen/pterm.git --depth 1
+    cd pterm
+    make
+
+    cp pterm /usr/bin/pterm
+

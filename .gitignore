@@ -16,6 +16,7 @@
 !CMakeLists.txt
 !main.c
 !makefile
+!pterm.def
 !pterm.h
 !readme.md
 !stb_image_resize.h
