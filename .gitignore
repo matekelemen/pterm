@@ -6,6 +6,7 @@
 !.github/colored_background.png
 !.github/workflows
 !.github/workflows/ci.yml
+!pterm.def
 
 !data
 !data/02.gif
