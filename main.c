@@ -20,6 +20,10 @@
 #endif
 
 
+#ifdef __GNUC__
+    static_assert(!(__GNUC__ == 11 && __GNUC_MINOR__ == 4), "I don't like your system and refuse to be built on it!");
+#endif
+
 
 /// Get parent terminal size on linux.
 void getTerminalSize(Int* columns, Int* rows)
